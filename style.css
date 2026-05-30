@@ -159,13 +159,33 @@ main {
   margin-bottom: 18px;
 }
 
-.settings-grid, .manual-grid, .team-controls, .lookup-row {
+.settings-grid, .manual-grid, .team-controls, .lookup-row, .rule-grid {
   display: grid;
   gap: 12px;
 }
 
 .settings-grid {
-  grid-template-columns: 1.5fr 1.5fr .55fr .65fr;
+  grid-template-columns: 1.4fr 1.4fr .55fr .65fr .9fr;
+}
+
+.rule-grid {
+  grid-template-columns: 1.6fr repeat(3, .6fr);
+  margin-top: 12px;
+}
+
+.option-check {
+  display: inline-flex;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 8px;
+  min-height: 43px;
+  color: var(--ink);
+}
+
+.option-check input {
+  width: 20px;
+  min-height: 20px;
+  accent-color: var(--pink);
 }
 
 .manual-grid {
@@ -494,7 +514,7 @@ th {
     flex-direction: column;
   }
 
-  .hero, .settings-grid, .manual-grid, .lookup-row, .team-controls, .replay-grid, .score-layout {
+  .hero, .settings-grid, .manual-grid, .lookup-row, .team-controls, .replay-grid, .score-layout, .rule-grid {
     grid-template-columns: 1fr;
   }
 
