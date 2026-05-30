@@ -1,1 +1,206 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>이진서 내전 계산기</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <p class="eyebrow">Eternal Return Custom Match</p>
+      <h1>이진서 내전 계산기</h1>
+    </div>
+    <div class="actions">
+      <button id="exportJson" type="button">백업</button>
+      <label class="file-button">
+        복원
+        <input id="importJson" type="file" accept="application/json">
+      </label>
+    </div>
+  </header>
 
+  <main>
+    <section class="hero">
+      <div class="hero-copy">
+        <p>시즌 랭크 참가자 등록, 블라인드 팀 배정, 4경기 점수 계산을 한 곳에서 관리합니다.</p>
+        <div class="stats">
+          <span><b id="applicantCount">0</b>명 신청</span>
+          <span><b id="teamCount">0</b>팀</span>
+          <span><b id="savedAt">저장 대기</b></span>
+        </div>
+      </div>
+      <img src="./2.PNG" alt="내전 진행 참고 이미지">
+    </section>
+
+    <section class="panel settings-panel">
+      <div class="section-head">
+        <div>
+          <p class="eyebrow">API 설정</p>
+          <h2>랭크 자동 조회</h2>
+        </div>
+        <button id="saveSettings" type="button">설정 저장</button>
+      </div>
+      <div class="settings-grid">
+        <label>API 키
+          <input id="apiKey" type="password" autocomplete="off" placeholder="developer.eternalreturn.io에서 발급받은 키">
+        </label>
+        <label>API 기본 주소
+          <input id="apiBase" type="url" value="https://open-api.bser.io/v1">
+        </label>
+        <label>시즌 ID
+          <input id="seasonId" type="number" min="1" value="10">
+        </label>
+        <label>팀 모드
+          <select id="teamMode">
+            <option value="3" selected>스쿼드</option>
+            <option value="1">솔로</option>
+            <option value="2">듀오</option>
+          </select>
+        </label>
+      </div>
+      <p class="note">공식 API의 시즌 ID는 게임 안에서 보이는 시즌 번호와 다를 수 있어 필요하면 여기서 조정합니다.</p>
+    </section>
+
+    <section class="panel">
+      <div class="section-head">
+        <div>
+          <p class="eyebrow">신청</p>
+          <h2>참가자 등록</h2>
+        </div>
+        <button id="resetForm" type="button">초기화</button>
+      </div>
+
+      <form id="applicantForm" class="applicant-form">
+        <div class="lookup-row">
+          <label>인게임 닉네임
+            <input id="nickname" required placeholder="닉네임 입력 후 조회">
+          </label>
+          <label>디코 닉네임
+            <input id="discordName" placeholder="신청자 표시명">
+          </label>
+          <button id="lookupRank" type="button">랭크 조회</button>
+        </div>
+
+        <div class="rank-preview" id="rankPreview">
+          <span>조회 전</span>
+          <span>MMR -</span>
+          <span>랭킹 -</span>
+          <span>랭크 게임 -</span>
+        </div>
+
+        <div>
+          <p class="field-title">역할군 3개 선택</p>
+          <div id="roleButtons" class="role-grid"></div>
+          <div id="roleOrder" class="role-order"></div>
+        </div>
+
+        <div class="manual-grid">
+          <label>수동 MMR
+            <input id="manualMmr" type="number" min="0" placeholder="자동 조회 실패 시">
+          </label>
+          <label>수동 랭킹
+            <input id="manualRank" type="number" min="1" placeholder="선택">
+          </label>
+          <label>메모
+            <input id="memo" placeholder="주 실험체, 확인사항 등">
+          </label>
+        </div>
+
+        <div class="manual-grid">
+          <label>모스트 1
+            <input id="most1" placeholder="키아라">
+          </label>
+          <label>모스트 2
+            <input id="most2" placeholder="이렘">
+          </label>
+          <label>모스트 3
+            <input id="most3" placeholder="바냐">
+          </label>
+        </div>
+
+        <button class="primary" type="submit">신청 완료</button>
+      </form>
+    </section>
+
+    <section class="panel">
+      <div class="section-head">
+        <div>
+          <p class="eyebrow">블라인드</p>
+          <h2>팀원 뽑기</h2>
+        </div>
+        <div class="actions">
+          <button id="makeTeams" type="button">자동 편성</button>
+          <button id="clearTeams" type="button">팀 초기화</button>
+        </div>
+      </div>
+      <div class="team-controls">
+        <label>팀 수
+          <input id="desiredTeams" type="number" min="2" max="12" value="8">
+        </label>
+        <label>한 팀 인원
+          <input id="teamSize" type="number" min="1" max="4" value="3">
+        </label>
+        <label class="toggle">
+          <input id="blindMode" type="checkbox" checked>
+          닉네임 블라인드
+        </label>
+      </div>
+      <div id="captainBoard" class="captain-board"></div>
+      <div id="teamsBoard" class="teams-board"></div>
+    </section>
+
+    <section class="panel">
+      <div class="section-head">
+        <div>
+          <p class="eyebrow">점수</p>
+          <h2>4경기 계산</h2>
+        </div>
+        <button id="exportCsv" type="button">CSV 내보내기</button>
+      </div>
+      <div id="replayBoard" class="replay-board"></div>
+      <div id="banSummary" class="ban-summary"></div>
+      <div id="scoreBoard" class="score-board"></div>
+    </section>
+
+    <section class="panel">
+      <div class="section-head">
+        <div>
+          <p class="eyebrow">명단</p>
+          <h2>참가자 목록</h2>
+        </div>
+        <button id="clearApplicants" type="button">명단 비우기</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>닉네임</th>
+              <th>공개 역할</th>
+              <th>역할 2</th>
+              <th>역할 3</th>
+              <th>디코</th>
+              <th>모스트</th>
+              <th>MMR</th>
+              <th>랭킹</th>
+              <th>구분</th>
+              <th>관리</th>
+            </tr>
+          </thead>
+          <tbody id="applicantRows"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <template id="matchTemplate">
+    <article class="match-card">
+      <h3></h3>
+      <div class="match-grid"></div>
+    </article>
+  </template>
+
+  <script src="./app.js"></script>
+</body>
+</html>
