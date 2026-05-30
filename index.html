@@ -59,6 +59,24 @@
             <option value="2">듀오</option>
           </select>
         </label>
+        <label class="option-check">
+          <input id="tournamentScoring" type="checkbox" checked>
+          대회 점수 산정 적용
+        </label>
+      </div>
+      <div class="rule-grid">
+        <label>등수 점수 (1~8등)
+          <input id="placementPoints" placeholder="10,7,5,4,3,2,1,0">
+        </label>
+        <label>1일차 킬
+          <input id="day1KillPoint" type="number" step="0.5" min="0">
+        </label>
+        <label>2일차 이후 킬
+          <input id="lateKillPoint" type="number" step="0.5" min="0">
+        </label>
+        <label>금구사 패널티
+          <input id="penaltyDeathPoint" type="number" step="0.5" min="0">
+        </label>
       </div>
       <p class="note">공식 API의 시즌 ID는 게임 안에서 보이는 시즌 번호와 다를 수 있어 필요하면 여기서 조정합니다.</p>
     </section>
@@ -165,23 +183,8 @@
         <aside>
           <div id="roundBanSummary" class="side-box"></div>
           <div id="banSummary" class="side-box"></div>
-          <div class="side-box">
-            <h3>점수 계산 RULE</h3>
-            <p>1일차 킬 0.5점</p>
-            <p>2일차 이후 킬 1점</p>
-            <p>패널티 데스(금구사) -1점</p>
-          </div>
-          <div class="side-box rank-rule">
-            <h3>등수 점수</h3>
-            <div><span>1등</span><b>10</b></div>
-            <div><span>2등</span><b>7</b></div>
-            <div><span>3등</span><b>5</b></div>
-            <div><span>4등</span><b>4</b></div>
-            <div><span>5등</span><b>3</b></div>
-            <div><span>6등</span><b>2</b></div>
-            <div><span>7등</span><b>1</b></div>
-            <div><span>8등</span><b>0</b></div>
-          </div>
+          <div id="scoreRuleBox" class="side-box"></div>
+          <div id="rankRuleBox" class="side-box rank-rule"></div>
         </aside>
       </div>
       <div id="scoreSummary" class="score-summary"></div>
