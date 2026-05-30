@@ -1,15 +1,32 @@
+@import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css");
+@import url("https://cdn.jsdelivr.net/gh/fonts-archive/Paperlogy/Paperlogy.css");
+
+@font-face {
+  font-family: "SlowGothic";
+  src: url("https://fastly.jsdelivr.net/gh/projectnoonnu/2503-1@1.0/SlowGothic.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
 :root {
-  --pink: #be4f78;
-  --ink: #24171d;
-  --muted: #7b6970;
-  --line: #edd8df;
-  --paper: #fff8f8;
-  --cream: #fff2d6;
-  --blue: #4b7ec7;
-  --green: #4f8f73;
+  --pink: #c75b7a;
+  --pink-soft: #f2bed1;
+  --pink-pale: #f8e8ee;
+  --ink: #241a20;
+  --muted: #776873;
+  --line: #ead7df;
+  --paper: #fffafb;
+  --cream: #fff3d7;
+  --blue: #496c93;
+  --green: #43766c;
   --surface: #ffffff;
-  --page: #fbf7f9;
-  --shadow: 0 18px 50px rgba(82, 31, 51, .14);
+  --page: #f9f5f6;
+  --charcoal: #34313a;
+  --shadow: 0 18px 50px rgba(72, 43, 55, .12);
+  --font-body: "Pretendard", "Noto Sans KR", "Malgun Gothic", system-ui, sans-serif;
+  --font-display: "SlowGothic", "Paperlogy", var(--font-body);
+  --font-heading: "Paperlogy", var(--font-body);
 }
 
 * { box-sizing: border-box; }
@@ -17,8 +34,10 @@
 body {
   margin: 0;
   color: var(--ink);
-  font-family: "Pretendard", "Noto Sans KR", "Malgun Gothic", system-ui, sans-serif;
-  background: linear-gradient(180deg, #fff 0, var(--page) 280px, #f7f4f5 100%);
+  font-family: var(--font-body);
+  background:
+    radial-gradient(circle at top left, rgba(242, 190, 209, .28), transparent 360px),
+    linear-gradient(180deg, #fff 0, var(--page) 300px, #f5f1f3 100%);
 }
 
 button, input, select {
@@ -31,12 +50,15 @@ button, .file-button {
   color: var(--pink);
   border-radius: 8px;
   padding: 10px 14px;
+  font-family: var(--font-heading);
   font-weight: 800;
   cursor: pointer;
+  transition: background .16s ease, color .16s ease, border-color .16s ease, transform .16s ease;
 }
 
 button:hover, .file-button:hover {
-  background: #fff0f5;
+  background: var(--pink-pale);
+  transform: translateY(-1px);
 }
 
 .primary {
@@ -61,12 +83,26 @@ button:hover, .file-button:hover {
 }
 
 h1, h2, h3, p { margin: 0; }
-h1 { font-size: clamp(24px, 4vw, 38px); color: var(--pink); }
-h2 { font-size: 24px; }
-h3 { font-size: 18px; }
+h1 {
+  font-family: var(--font-display);
+  font-size: clamp(28px, 4vw, 44px);
+  font-weight: 400;
+  color: var(--pink);
+}
+h2 {
+  font-family: var(--font-heading);
+  font-size: 24px;
+  font-weight: 800;
+}
+h3 {
+  font-family: var(--font-heading);
+  font-size: 18px;
+  font-weight: 800;
+}
 
 .eyebrow {
   color: var(--green);
+  font-family: var(--font-heading);
   font-weight: 900;
   letter-spacing: 0;
   font-size: 13px;
@@ -97,7 +133,7 @@ main {
   border: 1px solid var(--line);
   border-radius: 8px;
   background:
-    linear-gradient(135deg, rgba(190,79,120,.08), rgba(79,143,115,.08)),
+    linear-gradient(135deg, rgba(242,190,209,.45), rgba(67,118,108,.12)),
     var(--surface);
   box-shadow: var(--shadow);
 }
@@ -123,8 +159,9 @@ main {
 }
 
 .hero-copy h2 {
+  font-family: var(--font-display);
   font-size: clamp(28px, 5vw, 44px);
-  font-weight: 900;
+  font-weight: 400;
   line-height: 1.2;
   color: var(--ink);
 }
@@ -141,7 +178,7 @@ main {
   align-items: center;
   min-height: 38px;
   padding: 8px 12px;
-  background: var(--paper);
+  background: #fff;
   border: 1px solid var(--line);
   border-radius: 8px;
   font-weight: 800;
@@ -152,7 +189,7 @@ main {
   justify-content: center;
   align-items: flex-start;
   min-height: 66px;
-  background: #fff;
+  background: linear-gradient(180deg, #fff, var(--paper));
   box-shadow: 0 8px 24px rgba(82, 31, 51, .06);
 }
 
@@ -163,6 +200,7 @@ main {
 }
 
 .stats b {
+  font-family: var(--font-heading);
   font-size: 22px;
   line-height: 1.1;
 }
@@ -235,6 +273,7 @@ label {
   display: grid;
   gap: 7px;
   color: var(--muted);
+  font-family: var(--font-heading);
   font-weight: 800;
   font-size: 13px;
 }
@@ -247,6 +286,11 @@ input, select {
   padding: 9px 12px;
   color: var(--ink);
   background: #fff;
+}
+
+input:focus, select:focus {
+  outline: 2px solid rgba(199, 91, 122, .18);
+  border-color: var(--pink);
 }
 
 .note {
@@ -267,6 +311,7 @@ input, select {
 }
 
 .field-title {
+  font-family: var(--font-heading);
   font-weight: 900;
   margin-bottom: 10px;
 }
@@ -280,6 +325,7 @@ input, select {
 .role-grid button.active {
   background: var(--pink);
   color: #fff;
+  box-shadow: 0 10px 22px rgba(199, 91, 122, .2);
 }
 
 .toggle {
@@ -334,8 +380,9 @@ input, select {
   justify-content: space-between;
   gap: 8px;
   padding: 12px;
-  background: #36313a;
+  background: var(--charcoal);
   color: #fff;
+  font-family: var(--font-heading);
   font-weight: 900;
 }
 
@@ -355,8 +402,9 @@ input, select {
   margin-left: 6px;
   padding: 2px 7px;
   border-radius: 999px;
-  background: #edf4ff;
-  color: var(--blue);
+  background: #edf7f5;
+  color: var(--green);
+  font-family: var(--font-heading);
   font-size: 12px;
   font-weight: 900;
 }
@@ -381,31 +429,44 @@ input, select {
 .sheet-table {
   width: 100%;
   min-width: 720px;
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
   background: #fff;
-  border: 1px solid #222;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 8px 22px rgba(52, 49, 58, .06);
 }
 
 .sheet-table caption {
-  padding: 8px;
-  background: var(--cream);
-  border: 1px solid #222;
+  padding: 10px;
+  background: linear-gradient(90deg, var(--cream), var(--pink-pale));
+  border: 1px solid var(--line);
   border-bottom: 0;
+  border-radius: 8px 8px 0 0;
+  font-family: var(--font-heading);
   font-weight: 900;
-  font-size: 20px;
+  font-size: 18px;
 }
 
 .sheet-table th {
-  color: #111;
-  background: #3b3b3b;
+  background: var(--charcoal);
   color: #fff;
   text-align: center;
+  font-family: var(--font-heading);
+  font-weight: 800;
 }
 
 .sheet-table td {
   text-align: center;
-  border: 1px solid #444;
+  border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
   padding: 6px;
+}
+
+.sheet-table th {
+  border-right: 1px solid rgba(255,255,255,.16);
+  border-bottom: 1px solid rgba(255,255,255,.14);
 }
 
 .sheet-table input {
@@ -416,13 +477,16 @@ input, select {
 }
 
 .side-box {
-  border: 1px solid #333;
+  border: 1px solid var(--line);
+  border-radius: 8px;
   background: #fff;
   margin-bottom: 12px;
+  overflow: hidden;
+  box-shadow: 0 8px 22px rgba(52, 49, 58, .06);
 }
 
 .side-box h3 {
-  background: #9700e8;
+  background: var(--green);
   color: #fff;
   text-align: center;
   padding: 8px;
@@ -430,7 +494,7 @@ input, select {
 
 .side-box p, .side-box .empty {
   padding: 9px 12px;
-  border-top: 1px solid #999;
+  border-top: 1px solid var(--line);
   margin: 0;
 }
 
@@ -442,8 +506,9 @@ input, select {
 .pill-list span {
   padding: 10px;
   text-align: center;
-  border-top: 1px solid #999;
-  border-right: 1px solid #999;
+  border-top: 1px solid var(--line);
+  border-right: 1px solid var(--line);
+  font-family: var(--font-heading);
   font-weight: 900;
 }
 
@@ -465,8 +530,8 @@ input, select {
   gap: 4px;
   text-align: center;
   padding: 8px;
-  border-top: 1px solid #999;
-  border-right: 1px solid #999;
+  border-top: 1px solid var(--line);
+  border-right: 1px solid var(--line);
 }
 
 .rank-rule div:nth-child(4n + 1) {
@@ -529,6 +594,7 @@ th, td {
 th {
   color: var(--pink);
   background: var(--paper);
+  font-family: var(--font-heading);
 }
 
 .danger {
