@@ -160,7 +160,31 @@
         <button id="exportCsv" type="button">CSV 내보내기</button>
       </div>
       <div id="replayBoard" class="replay-board"></div>
-      <div id="banSummary" class="ban-summary"></div>
+      <div class="score-layout">
+        <div id="banBoard" class="ban-board"></div>
+        <aside>
+          <div id="roundBanSummary" class="side-box"></div>
+          <div id="banSummary" class="side-box"></div>
+          <div class="side-box">
+            <h3>점수 계산 RULE</h3>
+            <p>1일차 킬 0.5점</p>
+            <p>2일차 이후 킬 1점</p>
+            <p>패널티 데스(금구사) -1점</p>
+          </div>
+          <div class="side-box rank-rule">
+            <h3>등수 점수</h3>
+            <div><span>1등</span><b>10</b></div>
+            <div><span>2등</span><b>7</b></div>
+            <div><span>3등</span><b>5</b></div>
+            <div><span>4등</span><b>4</b></div>
+            <div><span>5등</span><b>3</b></div>
+            <div><span>6등</span><b>2</b></div>
+            <div><span>7등</span><b>1</b></div>
+            <div><span>8등</span><b>0</b></div>
+          </div>
+        </aside>
+      </div>
+      <div id="scoreSummary" class="score-summary"></div>
       <div id="scoreBoard" class="score-board"></div>
     </section>
 
