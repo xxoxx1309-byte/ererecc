@@ -284,14 +284,17 @@ function renderCaptains() {
 function renderScores() {
   normalizeScores();
   renderReplayCodes();
+  renderBanBoard();
+  renderRoundBanSummary();
   renderBanSummary();
+  renderScoreSummary();
   const board = $("#scoreBoard");
   board.innerHTML = "";
   state.scores.forEach((match, matchIndex) => {
     const template = $("#matchTemplate").content.cloneNode(true);
     template.querySelector("h3").textContent = `${matchIndex + 1}경기`;
     const grid = template.querySelector(".match-grid");
-    grid.innerHTML = "<b>팀</b><b>등수</b><b>1일차 킬</b><b>2일차 이후 킬</b><b>금구사</b><b>밴 실험체</b>";
+    grid.innerHTML = "<b>팀</b><b>등수</b><b>1일차 킬</b><b>2일차 이후 킬</b><b>금구사</b>";
     state.teams.forEach((team) => {
       const entry = match[team.id] || {};
       grid.insertAdjacentHTML("beforeend", `
@@ -303,11 +306,26 @@ function renderScores() {
         <input data-score="${matchIndex}:${team.id}:day1Kills" type="number" min="0" step="1" value="${entry.day1Kills || 0}">
         <input data-score="${matchIndex}:${team.id}:lateKills" type="number" min="0" step="1" value="${entry.lateKills || 0}">
         <input data-score="${matchIndex}:${team.id}:penaltyDeaths" type="number" min="0" step="1" value="${entry.penaltyDeaths || 0}">
-        <input data-score="${matchIndex}:${team.id}:bans" value="${escapeHtml(entry.bans || "")}" placeholder="니키">
       `);
     });
     board.appendChild(template);
   });
+}
+
+function renderBanBoard() {
+  const teamHeaders = state.teams.map((team) => `<th>${team.name}</th>`).join("");
+  const rows = state.scores.map((match, matchIndex) => `
+    <tr>
+      <th>${matchIndex + 1}경기</th>
+      ${state.teams.map((team) => {
+        const entry = match[team.id] || {};
+        return `<td><input data-ban="${matchIndex}:${team.id}" value="${escapeHtml(entry.bans || "")}" placeholder="실험체"></td>`;
+      }).join("")}
+    </tr>
+  `).join("");
+  $("#banBoard").innerHTML = state.teams.length
+    ? `<table class="sheet-table"><caption>Ban Phase</caption><thead><tr><th></th>${teamHeaders}</tr></thead><tbody>${rows}</tbody></table>`
+    : "<p class=\"note\">팀 편성 후 경기별 밴 실험체를 입력할 수 있습니다.</p>";
 }
 
 function renderBanSummary() {
@@ -325,8 +343,43 @@ function renderBanSummary() {
     .filter(([, count]) => count >= 2)
     .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "ko"));
   $("#banSummary").innerHTML = repeated.length
-    ? repeated.map(([name, count]) => `<span>${escapeHtml(name)} ${count}회 밴</span>`).join("")
-    : "<span>2회 이상 밴 실험체 없음</span>";
+    ? `<h3>4경기 중 2경기 밴 당한 실험체</h3><div class="pill-list">${repeated.map(([name]) => `<span>${escapeHtml(name)}</span>`).join("")}</div>`
+    : "<h3>4경기 중 2경기 밴 당한 실험체</h3><p class=\"empty\">없음</p>";
+}
+
+function renderRoundBanSummary() {
+  const rounds = state.scores.map((match, index) => {
+    const counts = new Map();
+    Object.values(match).forEach((entry) => {
+      String(entry.bans || "")
+        .split(/[,\s/]+/)
+        .map((name) => name.trim())
+        .filter(Boolean)
+        .forEach((name) => counts.set(name, (counts.get(name) || 0) + 1));
+    });
+    const names = [...counts.entries()]
+      .filter(([, count]) => count >= 3)
+      .map(([name]) => name)
+      .join(", ");
+    return `<span>${index + 1}라운드<br>${escapeHtml(names || "-")}</span>`;
+  }).join("");
+  $("#roundBanSummary").innerHTML = `<h3>라운드 밴 합계</h3><div class="pill-list">${rounds}</div>`;
+}
+
+function renderScoreSummary() {
+  if (!state.teams.length) {
+    $("#scoreSummary").innerHTML = "";
+    return;
+  }
+  const headers = state.teams.map((team) => `<th>${team.name}</th>`).join("");
+  const matchRows = state.scores.map((match, index) => `
+    <tr>
+      <th>${index + 1}경기</th>
+      ${state.teams.map((team) => `<td>${scoreFor(match[team.id])}</td>`).join("")}
+    </tr>
+  `).join("");
+  const totalRow = `<tr><th>총점수</th>${state.teams.map((team) => `<td><b>${teamTotal(team.id)}</b></td>`).join("")}</tr>`;
+  $("#scoreSummary").innerHTML = `<table class="sheet-table"><thead><tr><th></th>${headers}</tr></thead><tbody>${matchRows}${totalRow}</tbody></table>`;
 }
 
 function renderReplayCodes() {
@@ -439,6 +492,7 @@ function bindEvents() {
     saveState();
   });
   $("#scoreBoard").addEventListener("change", updateScore);
+  $("#banBoard").addEventListener("change", updateBan);
   $("#replayBoard").addEventListener("change", updateReplay);
   $("#captainBoard").addEventListener("change", updateCaptain);
   $("#exportJson").addEventListener("click", exportJson);
@@ -458,6 +512,14 @@ function updateReplay(event) {
   const index = event.target.dataset.replay;
   if (index === undefined) return;
   state.replayCodes[Number(index)] = event.target.value.trim();
+  saveState();
+}
+
+function updateBan(event) {
+  const token = event.target.dataset.ban;
+  if (!token) return;
+  const [matchIndex, teamId] = token.split(":");
+  state.scores[Number(matchIndex)][teamId].bans = event.target.value.trim();
   saveState();
 }
 
