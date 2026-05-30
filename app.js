@@ -1,6 +1,11 @@
 const STORAGE_KEY = "er-scrim-calculator-v1";
 const ROLES = ["스증원딜", "평원딜", "공격력브루저", "스증브루저", "암살자", "서포터", "탱커"];
-const PLACE_POINTS = { 1: 10, 2: 7, 3: 5, 4: 4, 5: 3, 6: 2, 7: 1, 8: 0 };
+const DEFAULT_SCORE_RULE = {
+  placement: [10, 7, 5, 4, 3, 2, 1, 0],
+  day1Kill: 0.5,
+  lateKill: 1,
+  penaltyDeath: 1
+};
 
 const state = loadState();
 let selectedRoles = [];
@@ -14,7 +19,9 @@ function defaultState() {
       apiKey: "",
       apiBase: "https://open-api.bser.io/v1",
       seasonId: 10,
-      teamMode: 3
+      teamMode: 3,
+      tournamentScoring: true,
+      scoreRule: { ...DEFAULT_SCORE_RULE }
     },
     applicants: [],
     teams: [],
@@ -27,10 +34,23 @@ function defaultState() {
 
 function loadState() {
   try {
-    return { ...defaultState(), ...JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}") };
+    return normalizeState(JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}"));
   } catch {
     return defaultState();
   }
+}
+
+function normalizeState(saved) {
+  const base = defaultState();
+  const settings = {
+    ...base.settings,
+    ...(saved.settings || {}),
+    scoreRule: {
+      ...DEFAULT_SCORE_RULE,
+      ...(saved.settings?.scoreRule || {})
+    }
+  };
+  return { ...base, ...saved, settings };
 }
 
 function saveState() {
@@ -44,15 +64,44 @@ function bindSettings() {
   $("#apiBase").value = state.settings.apiBase || "https://open-api.bser.io/v1";
   $("#seasonId").value = state.settings.seasonId || 10;
   $("#teamMode").value = state.settings.teamMode || 3;
+  $("#tournamentScoring").checked = state.settings.tournamentScoring !== false;
+  $("#placementPoints").value = currentScoreRule().placement.join(",");
+  $("#day1KillPoint").value = currentScoreRule().day1Kill;
+  $("#lateKillPoint").value = currentScoreRule().lateKill;
+  $("#penaltyDeathPoint").value = currentScoreRule().penaltyDeath;
 }
 
 function readSettings() {
+  const placement = $("#placementPoints").value
+    .split(",")
+    .map((point) => Number(point.trim()))
+    .filter((point) => Number.isFinite(point))
+    .slice(0, 8);
   state.settings = {
     apiKey: $("#apiKey").value.trim(),
     apiBase: $("#apiBase").value.trim().replace(/\/$/, ""),
     seasonId: Number($("#seasonId").value || 10),
-    teamMode: Number($("#teamMode").value || 3)
+    teamMode: Number($("#teamMode").value || 3),
+    tournamentScoring: $("#tournamentScoring").checked,
+    scoreRule: {
+      placement: placement.length === 8 ? placement : [...DEFAULT_SCORE_RULE.placement],
+      day1Kill: Number($("#day1KillPoint").value || DEFAULT_SCORE_RULE.day1Kill),
+      lateKill: Number($("#lateKillPoint").value || DEFAULT_SCORE_RULE.lateKill),
+      penaltyDeath: Number($("#penaltyDeathPoint").value || DEFAULT_SCORE_RULE.penaltyDeath)
+    }
   };
+}
+
+function currentScoreRule() {
+  return {
+    ...DEFAULT_SCORE_RULE,
+    ...(state.settings.scoreRule || {})
+  };
+}
+
+function placementPoints() {
+  const rule = currentScoreRule();
+  return Object.fromEntries(rule.placement.map((point, index) => [index + 1, point]));
 }
 
 function renderRoles() {
@@ -226,9 +275,11 @@ function getApplicant(id) {
 }
 
 function scoreFor(entry = {}) {
+  const rule = currentScoreRule();
+  const places = placementPoints();
   const place = Number(entry.place || 0);
-  const placeScore = PLACE_POINTS[place] ?? 0;
-  return placeScore + Number(entry.day1Kills || 0) * 0.5 + Number(entry.lateKills || 0) - Number(entry.penaltyDeaths || 0);
+  const placeScore = places[place] ?? 0;
+  return placeScore + Number(entry.day1Kills || 0) * rule.day1Kill + Number(entry.lateKills || 0) * rule.lateKill - Number(entry.penaltyDeaths || 0) * rule.penaltyDeath;
 }
 
 function teamTotal(teamId) {
@@ -288,6 +339,7 @@ function renderScores() {
   renderRoundBanSummary();
   renderBanSummary();
   renderScoreSummary();
+  renderScoreRules();
   const board = $("#scoreBoard");
   board.innerHTML = "";
   state.scores.forEach((match, matchIndex) => {
@@ -301,7 +353,7 @@ function renderScores() {
         <span>${team.name} <small>${scoreFor(entry)}점</small></span>
         <select data-score="${matchIndex}:${team.id}:place">
           <option value="">-</option>
-          ${Object.keys(PLACE_POINTS).map((place) => `<option value="${place}" ${String(entry.place) === place ? "selected" : ""}>${place}등</option>`).join("")}
+          ${Object.keys(placementPoints()).map((place) => `<option value="${place}" ${String(entry.place) === place ? "selected" : ""}>${place}등</option>`).join("")}
         </select>
         <input data-score="${matchIndex}:${team.id}:day1Kills" type="number" min="0" step="1" value="${entry.day1Kills || 0}">
         <input data-score="${matchIndex}:${team.id}:lateKills" type="number" min="0" step="1" value="${entry.lateKills || 0}">
@@ -310,6 +362,21 @@ function renderScores() {
     });
     board.appendChild(template);
   });
+}
+
+function renderScoreRules() {
+  const rule = currentScoreRule();
+  $("#scoreRuleBox").innerHTML = `
+    <h3>점수 계산 RULE</h3>
+    <p>대회 점수 산정 ${state.settings.tournamentScoring === false ? "미적용" : "적용"}</p>
+    <p>1일차 킬 ${rule.day1Kill}점</p>
+    <p>2일차 이후 킬 ${rule.lateKill}점</p>
+    <p>패널티 데스(금구사) -${rule.penaltyDeath}점</p>
+  `;
+  $("#rankRuleBox").innerHTML = `
+    <h3>등수 점수</h3>
+    ${rule.placement.map((point, index) => `<div><span>${index + 1}등</span><b>${point}</b></div>`).join("")}
+  `;
 }
 
 function renderBanBoard() {
@@ -427,7 +494,7 @@ function exportJson() {
 }
 
 function exportCsv() {
-  const rows = [["team", "captain", "members", "total", "match", "replayCode", "place", "day1Kills", "lateKills", "penaltyDeaths", "score", "bans"]];
+  const rows = [["scoringEnabled", state.settings.tournamentScoring !== false ? "Y" : "N"], ["placementPoints", currentScoreRule().placement.join("/")], ["team", "captain", "members", "total", "match", "replayCode", "place", "day1Kills", "lateKills", "penaltyDeaths", "score", "bans"]];
   state.teams.forEach((team) => {
     const members = team.members.map((id) => getApplicant(id)?.nickname).filter(Boolean).join(" / ");
     const captain = getApplicant(state.captains[team.id])?.nickname || "";
@@ -462,6 +529,7 @@ function escapeHtml(value) {
 function bindEvents() {
   $("#saveSettings").addEventListener("click", () => {
     readSettings();
+    bindSettings();
     saveState();
   });
   $("#lookupRank").addEventListener("click", lookupRank);
@@ -535,7 +603,7 @@ async function importJson(event) {
   const file = event.target.files[0];
   if (!file) return;
   const imported = JSON.parse(await file.text());
-  Object.assign(state, defaultState(), imported);
+  Object.assign(state, normalizeState(imported));
   bindSettings();
   saveState();
   event.target.value = "";
