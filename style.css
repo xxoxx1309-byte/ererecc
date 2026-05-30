@@ -92,11 +92,16 @@ main {
 }
 
 .hero {
-  min-height: 360px;
+  min-height: 210px;
   display: grid;
-  grid-template-columns: 1fr minmax(320px, 480px);
-  gap: 22px;
+  grid-template-columns: 1fr 360px;
+  gap: 0;
   align-items: stretch;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, .92);
+  box-shadow: var(--shadow);
 }
 
 .hero-copy, .panel {
@@ -107,33 +112,41 @@ main {
 }
 
 .hero-copy {
-  padding: clamp(26px, 5vw, 56px);
+  padding: clamp(22px, 4vw, 40px);
   display: flex;
-  flex-direction: column;
-  justify-content: flex-end;
-  gap: 28px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background:
+    linear-gradient(90deg, rgba(255,255,255,.98), rgba(255,255,255,.9)),
+    url("./5.png") left center / cover;
 }
 
-.hero-copy p {
-  font-size: clamp(24px, 4vw, 44px);
+.hero-copy h2 {
+  font-size: clamp(30px, 5vw, 52px);
   font-weight: 900;
   line-height: 1.2;
-  max-width: 820px;
+  color: var(--ink);
 }
 
-.hero img {
+.hero-visual {
   width: 100%;
   height: 100%;
-  object-fit: cover;
-  border-radius: 8px;
-  border: 1px solid var(--line);
-  box-shadow: var(--shadow);
+  min-height: 210px;
+  background:
+    linear-gradient(90deg, rgba(190,79,120,.12), rgba(190,79,120,.4)),
+    url("./2.PNG") center / cover;
+  border-left: 1px solid var(--line);
 }
 
 .stats {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(2, 118px) minmax(230px, auto);
   gap: 10px;
-  flex-wrap: wrap;
+  align-items: stretch;
 }
 
 .stats span, .rank-preview span, .role-order span {
@@ -145,6 +158,32 @@ main {
   border: 1px solid var(--line);
   border-radius: 8px;
   font-weight: 800;
+}
+
+.stats span {
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+  min-height: 68px;
+  background: #fff;
+}
+
+.stats small {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.stats b {
+  font-size: 22px;
+  line-height: 1.1;
+}
+
+.stats em {
+  color: var(--muted);
+  font-style: normal;
+  font-size: 13px;
+  font-weight: 900;
 }
 
 .panel {
@@ -518,8 +557,19 @@ th {
     grid-template-columns: 1fr;
   }
 
-  .hero img {
-    max-height: 280px;
+  .hero-copy {
+    align-items: flex-start;
+  }
+
+  .hero-visual {
+    min-height: 140px;
+    border-left: 0;
+    border-top: 1px solid var(--line);
+  }
+
+  .stats {
+    width: 100%;
+    grid-template-columns: 1fr;
   }
 
   .role-grid {
