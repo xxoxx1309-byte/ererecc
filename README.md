@@ -19,10 +19,6 @@ python -m http.server 5174 --bind 127.0.0.1
 - `index.html`
 - `style.css`
 - `app.js`
-- `2.PNG`
-- `3.PNG`
-- `4.PNG`
-- `5.png`
 
 GitHub 저장소의 `Settings > Pages`에서 배포 브랜치를 선택하면 사이트 주소가 생성됩니다.
 
