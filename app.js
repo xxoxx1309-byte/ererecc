@@ -1,8 +1,8 @@
 const STORAGE_KEY = "er-custom-match-calculator-v2";
 const LEGACY_STORAGE_KEY = "er-scrim-calculator-v1";
 const API_BASE = "https://open-api.bser.io";
-const DEFAULT_SEASON_ID = 19;
-const STATE_VERSION = 3;
+const DEFAULT_SEASON_ID = 39;
+const STATE_VERSION = 4;
 const ROLES = ["스증원딜", "평원딜", "공격력브루저", "스증브루저", "암살자", "서포터", "탱커"];
 const DEFAULT_SCORE_RULE = {
   placement: [10, 7, 5, 4, 3, 2, 1, 0],
@@ -35,6 +35,15 @@ function defaultState() {
       tournamentScoring: true,
       scoreRule: structuredClone(DEFAULT_SCORE_RULE)
     },
+    eventInfo: {
+      date: "",
+      host: "",
+      time: "",
+      tierLimit: "",
+      teamFormat: "",
+      capacity: "",
+      rules: ""
+    },
     applicants: [],
     teams: [],
     captains: {},
@@ -57,7 +66,7 @@ function loadState() {
 function normalizeState(saved, isLegacy = false) {
   const base = defaultState();
   const needsSeasonMigration = Number(saved.version || 0) < STATE_VERSION
-    && Number(saved.settings?.seasonId) === 39;
+    && Number(saved.settings?.seasonId) === 19;
   const settings = {
     ...base.settings,
     ...(saved.settings || {}),
@@ -73,6 +82,7 @@ function normalizeState(saved, isLegacy = false) {
   };
   const normalized = { ...base, ...saved, version: STATE_VERSION, settings };
   normalized.applicants = Array.isArray(saved.applicants) ? saved.applicants : [];
+  normalized.eventInfo = { ...base.eventInfo, ...(saved.eventInfo || {}) };
   normalized.teams = Array.isArray(saved.teams) ? saved.teams : [];
   normalized.captains = saved.captains || {};
   normalized.replayCodes = Array.isArray(saved.replayCodes) ? saved.replayCodes : [];
@@ -120,6 +130,13 @@ function bindSettings() {
   $("#day1KillPoint").value = currentScoreRule().day1Kill;
   $("#lateKillPoint").value = currentScoreRule().lateKill;
   $("#penaltyDeathPoint").value = currentScoreRule().penaltyDeath;
+  $("#eventDate").value = state.eventInfo.date || "";
+  $("#eventHost").value = state.eventInfo.host || "";
+  $("#eventTime").value = state.eventInfo.time || "";
+  $("#tierLimit").value = state.eventInfo.tierLimit || "";
+  $("#teamFormat").value = state.eventInfo.teamFormat || "";
+  $("#capacity").value = state.eventInfo.capacity || "";
+  $("#eventRules").value = state.eventInfo.rules || "";
   populateSeasonSelect();
 }
 
@@ -147,6 +164,15 @@ function readSettings() {
       lateKill: Number($("#lateKillPoint").value || DEFAULT_SCORE_RULE.lateKill),
       penaltyDeath: Number($("#penaltyDeathPoint").value || DEFAULT_SCORE_RULE.penaltyDeath)
     }
+  };
+  state.eventInfo = {
+    date: $("#eventDate").value.trim(),
+    host: $("#eventHost").value.trim(),
+    time: $("#eventTime").value.trim(),
+    tierLimit: $("#tierLimit").value.trim(),
+    teamFormat: $("#teamFormat").value.trim(),
+    capacity: $("#capacity").value.trim(),
+    rules: $("#eventRules").value.trim()
   };
   syncMatchArrays();
 }
@@ -204,7 +230,7 @@ function populateSeasonSelect() {
   select.innerHTML = list
     .slice()
     .sort((a, b) => Number(b.seasonID) - Number(a.seasonID))
-    .map((season) => `<option value="${season.seasonID}" ${Number(season.seasonID) === Number(state.settings.seasonId) ? "selected" : ""}>${escapeHtml(season.seasonName)} · API ${season.seasonID}${Number(season.isCurrent) === 1 ? " · 현재" : ""}</option>`)
+    .map((season) => `<option value="${season.seasonID}" ${Number(season.seasonID) === Number(state.settings.seasonId) ? "selected" : ""}>${escapeHtml(displaySeasonName(season))} · API ${season.seasonID}${Number(season.isCurrent) === 1 ? " · 현재" : ""}</option>`)
     .join("");
   updateSeasonLabel();
 }
@@ -212,8 +238,14 @@ function populateSeasonSelect() {
 function updateSeasonLabel() {
   const season = seasons.find((item) => Number(item.seasonID) === Number(state.settings.seasonId));
   $("#seasonLabel").textContent = season
-    ? `${season.seasonName} · API ID ${season.seasonID}`
-    : `Season10 · API ID ${state.settings.seasonId}`;
+    ? `${displaySeasonName(season)} · API ID ${season.seasonID}`
+    : `정출 시즌 11 · API ID ${state.settings.seasonId}`;
+}
+
+function displaySeasonName(season) {
+  const apiSeason = Number(String(season.seasonName || "").match(/\d+/)?.[0]);
+  if (apiSeason >= 10) return `정출 시즌 ${apiSeason - 9}`;
+  return season.seasonName || `API 시즌 ${season.seasonID}`;
 }
 
 function setApiStatus(type, text) {
@@ -583,8 +615,27 @@ function renderOverview() {
   updateSeasonLabel();
 }
 
+function renderNotice() {
+  const facts = [
+    ["일정", state.eventInfo.date],
+    ["진행", state.eventInfo.host],
+    ["시간", state.eventInfo.time],
+    ["티어 제한", state.eventInfo.tierLimit],
+    ["팀 방식", state.eventInfo.teamFormat],
+    ["인원", state.eventInfo.capacity]
+  ];
+  const hasFact = facts.some(([, value]) => value);
+  $("#eventFacts").innerHTML = hasFact
+    ? facts.map(([label, value]) => `<div class="event-fact"><span>${label}</span><strong>${escapeHtml(value || "-")}</strong></div>`).join("")
+    : "";
+  const rules = $("#rulesDisplay");
+  rules.className = `rules-display${state.eventInfo.rules ? "" : " empty"}`;
+  rules.textContent = state.eventInfo.rules || "설정에서 일정과 내전 규칙을 작성해 주세요.";
+}
+
 function render() {
   renderOverview();
+  renderNotice();
   renderRoles();
   renderTeams();
   renderScores();
@@ -641,6 +692,7 @@ async function importJson(event) {
 
 function bindEvents() {
   $("#openSettings").addEventListener("click", () => $("#settingsDialog").showModal());
+  $("#editNotice").addEventListener("click", () => $("#settingsDialog").showModal());
   $("#testApi").addEventListener("click", async () => {
     readSettings();
     await refreshApiMetadata(true);
