@@ -1,6 +1,8 @@
 const STORAGE_KEY = "er-custom-match-calculator-v2";
 const LEGACY_STORAGE_KEY = "er-scrim-calculator-v1";
 const API_BASE = "https://open-api.bser.io";
+const DEFAULT_SEASON_ID = 19;
+const STATE_VERSION = 3;
 const ROLES = ["스증원딜", "평원딜", "공격력브루저", "스증브루저", "암살자", "서포터", "탱커"];
 const DEFAULT_SCORE_RULE = {
   placement: [10, 7, 5, 4, 3, 2, 1, 0],
@@ -20,11 +22,12 @@ const $ = (selector) => document.querySelector(selector);
 
 function defaultState() {
   return {
+    version: STATE_VERSION,
     settings: {
       eventName: "이터널 리턴 내전",
       apiKey: "",
       apiBase: API_BASE,
-      seasonId: 39,
+      seasonId: DEFAULT_SEASON_ID,
       teamMode: 3,
       matchCount: 4,
       desiredTeams: 8,
@@ -53,18 +56,22 @@ function loadState() {
 
 function normalizeState(saved, isLegacy = false) {
   const base = defaultState();
+  const needsSeasonMigration = Number(saved.version || 0) < STATE_VERSION
+    && Number(saved.settings?.seasonId) === 39;
   const settings = {
     ...base.settings,
     ...(saved.settings || {}),
     eventName: saved.settings?.eventName || base.settings.eventName,
-    seasonId: isLegacy ? base.settings.seasonId : Number(saved.settings?.seasonId || base.settings.seasonId),
+    seasonId: isLegacy || needsSeasonMigration
+      ? DEFAULT_SEASON_ID
+      : Number(saved.settings?.seasonId || DEFAULT_SEASON_ID),
     matchCount: Number(saved.settings?.matchCount || saved.scores?.length || base.settings.matchCount),
     scoreRule: {
       ...DEFAULT_SCORE_RULE,
       ...(saved.settings?.scoreRule || {})
     }
   };
-  const normalized = { ...base, ...saved, settings };
+  const normalized = { ...base, ...saved, version: STATE_VERSION, settings };
   normalized.applicants = Array.isArray(saved.applicants) ? saved.applicants : [];
   normalized.teams = Array.isArray(saved.teams) ? saved.teams : [];
   normalized.captains = saved.captains || {};
@@ -128,7 +135,7 @@ function readSettings() {
     eventName: $("#eventName").value.trim() || "이터널 리턴 내전",
     apiKey: $("#apiKey").value.trim(),
     apiBase: API_BASE,
-    seasonId: Number($("#seasonId").value || state.settings.seasonId || 39),
+    seasonId: Number($("#seasonId").value || state.settings.seasonId || DEFAULT_SEASON_ID),
     teamMode: Number($("#teamMode").value || 3),
     matchCount: Math.min(12, Math.max(1, Number($("#matchCount").value || 4))),
     desiredTeams: Math.min(12, Math.max(2, Number($("#desiredTeams").value || 8))),
@@ -175,9 +182,8 @@ async function refreshApiMetadata(showMessage = false) {
     ]);
     seasons = (seasonJson.data || []).filter((season) => !/pre/i.test(season.seasonName));
     characterNames = new Map((characterJson.data || []).map((character) => [Number(character.code), character.name]));
-    const current = seasons.find((season) => Number(season.isCurrent) === 1);
     const hasSelected = seasons.some((season) => Number(season.seasonID) === Number(state.settings.seasonId));
-    if (!hasSelected && current) state.settings.seasonId = Number(current.seasonID);
+    if (!hasSelected) state.settings.seasonId = DEFAULT_SEASON_ID;
     populateSeasonSelect();
     setApiStatus("ok", "API 연결됨");
     if (showMessage) toast("Open API 연결을 확인했습니다.");
@@ -198,14 +204,16 @@ function populateSeasonSelect() {
   select.innerHTML = list
     .slice()
     .sort((a, b) => Number(b.seasonID) - Number(a.seasonID))
-    .map((season) => `<option value="${season.seasonID}" ${Number(season.seasonID) === Number(state.settings.seasonId) ? "selected" : ""}>${escapeHtml(season.seasonName)}${Number(season.isCurrent) === 1 ? " · 현재" : ""}</option>`)
+    .map((season) => `<option value="${season.seasonID}" ${Number(season.seasonID) === Number(state.settings.seasonId) ? "selected" : ""}>${escapeHtml(season.seasonName)} · API ${season.seasonID}${Number(season.isCurrent) === 1 ? " · 현재" : ""}</option>`)
     .join("");
   updateSeasonLabel();
 }
 
 function updateSeasonLabel() {
   const season = seasons.find((item) => Number(item.seasonID) === Number(state.settings.seasonId));
-  $("#seasonLabel").textContent = season?.seasonName || `시즌 ID ${state.settings.seasonId}`;
+  $("#seasonLabel").textContent = season
+    ? `${season.seasonName} · API ID ${season.seasonID}`
+    : `Season10 · API ID ${state.settings.seasonId}`;
 }
 
 function setApiStatus(type, text) {
