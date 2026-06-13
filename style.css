@@ -388,7 +388,41 @@ input:focus, select:focus, textarea:focus {
 .rank-metrics span { display: block; color: var(--subtle); font-size: 11px; font-weight: 650; }
 .rank-metrics strong { display: block; margin-top: 4px; font-family: var(--heading); font-size: 19px; }
 .rank-metrics small { display: block; margin-top: 3px; color: var(--subtle); font-size: 10px; font-weight: 650; }
-.most-list { display: flex; flex-wrap: wrap; gap: 6px; }
+.most-list { display: grid; gap: 6px; }
+
+.most-stat {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+  min-height: 50px;
+  padding: 8px 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+
+.most-rank {
+  display: grid;
+  width: 24px;
+  aspect-ratio: 1;
+  place-items: center;
+  color: #6c3e00;
+  background: #fff0bd;
+  border-radius: 4px;
+  font-family: var(--heading);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.most-stat div { min-width: 0; }
+.most-stat strong { display: block; overflow: hidden; color: var(--ink); font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+.most-stat small { display: block; margin-top: 2px; color: var(--subtle); font-size: 10px; font-weight: 650; }
+.most-stat b { color: #a33131; font-family: var(--heading); font-size: 16px; }
+
+.roster-most { display: grid; gap: 3px; min-width: 112px; }
+.roster-most span { color: var(--subtle); font-size: 11px; white-space: nowrap; }
+.roster-most strong { color: var(--ink); }
 
 .notice-panel { display: grid; gap: 2px; }
 

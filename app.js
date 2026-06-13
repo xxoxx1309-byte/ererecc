@@ -301,11 +301,15 @@ async function lookupRank() {
       erFetch(`v2/user/stats/uid/${userId}/${seasonId}/3`)
     ]);
     const stats = (statsJson.userStats || []).find((item) => Number(item.matchingTeamMode) === teamMode) || statsJson.userStats?.[0] || {};
-    const most = (stats.characterStats || [])
+    const mostStats = (stats.characterStats || [])
       .slice()
       .sort((a, b) => Number(b.usages || b.totalGames || 0) - Number(a.usages || a.totalGames || 0))
       .slice(0, 3)
-      .map((item) => characterNames.get(Number(item.characterCode)) || `실험체 #${item.characterCode}`);
+      .map((item) => ({
+        name: characterNames.get(Number(item.characterCode)) || `실험체 #${item.characterCode}`,
+        totalGames: Number(item.totalGames || item.usages || 0),
+        wins: Number(item.wins || 0)
+      }));
 
     rankCache = {
       userId: user.userId,
@@ -318,7 +322,8 @@ async function lookupRank() {
       averageKills: stats.averageKills ?? null,
       top3: stats.top3 ?? null,
       rankPercent: stats.rankPercent ?? null,
-      most
+      most: mostStats.map((item) => item.name),
+      mostStats
     };
     $("#manualMmr").value = rankCache.mmr || "";
     $("#manualRank").value = rankCache.rank || "";
@@ -358,7 +363,7 @@ function updateRankPreview(data, stateName = "success") {
       </div>
       <div>
         <p class="field-title">모스트 실험체</p>
-        <div class="most-list">${data.most.length ? data.most.map((name) => `<span class="rank-tag">${escapeHtml(name)}</span>`).join("") : "<span class=\"rank-tag\">기록 없음</span>"}</div>
+        <div class="most-list">${renderMostStats(data)}</div>
       </div>
     `;
   }
@@ -384,6 +389,7 @@ function submitApplicant(event) {
     totalGames: rankCache?.totalGames || 0,
     totalWins: rankCache?.totalWins || 0,
     most: rankCache?.most || [],
+    mostStats: rankCache?.mostStats || [],
     memo: $("#memo").value.trim(),
     createdAt: new Date().toISOString()
   };
@@ -606,7 +612,7 @@ function renderApplicants() {
       <td>${formatNumber(player.mmr)}</td>
       <td>${player.rank ? `${formatNumber(player.rank)}위` : "-"}</td>
       <td>${formatWinRate(player.totalWins, player.totalGames)}</td>
-      <td>${escapeHtml(player.most?.join(" / ") || "-")}</td>
+      <td><div class="roster-most">${renderRosterMost(player)}</div></td>
       <td><button class="danger" data-remove="${player.id}" type="button" aria-label="${escapeHtml(player.nickname)} 삭제"><i data-lucide="trash-2"></i></button></td>
     </tr>`).join("") || `<tr><td colspan="9">등록된 참가자가 없습니다.</td></tr>`;
 }
@@ -812,6 +818,39 @@ function formatWinRate(totalWins, totalGames) {
   const wins = Number(totalWins);
   if (!Number.isFinite(games) || games <= 0 || !Number.isFinite(wins)) return "-";
   return `${((wins / games) * 100).toFixed(1)}%`;
+}
+
+function renderMostStats(data) {
+  const stats = Array.isArray(data.mostStats) ? data.mostStats : [];
+  if (stats.length) {
+    return stats.map((item, index) => `
+      <article class="most-stat">
+        <span class="most-rank">${index + 1}</span>
+        <div>
+          <strong>${escapeHtml(item.name)}</strong>
+          <small>${formatNumber(item.wins, true)}승 / ${formatNumber(item.totalGames, true)}경기</small>
+        </div>
+        <b>${formatWinRate(item.wins, item.totalGames)}</b>
+      </article>`).join("");
+  }
+  if (Array.isArray(data.most) && data.most.length) {
+    return data.most.map((name, index) => `
+      <article class="most-stat">
+        <span class="most-rank">${index + 1}</span>
+        <div><strong>${escapeHtml(name)}</strong><small>상세 기록 없음</small></div>
+        <b>-</b>
+      </article>`).join("");
+  }
+  return `<span class="rank-tag">기록 없음</span>`;
+}
+
+function renderRosterMost(player) {
+  if (Array.isArray(player.mostStats) && player.mostStats.length) {
+    return player.mostStats.map((item) =>
+      `<span><strong>${escapeHtml(item.name)}</strong> ${formatWinRate(item.wins, item.totalGames)}</span>`
+    ).join("");
+  }
+  return escapeHtml(player.most?.join(" / ") || "-");
 }
 
 async function bootstrap() {
