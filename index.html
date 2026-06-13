@@ -96,7 +96,7 @@
 
           <div>
             <p class="field-title">역할군 우선순위</p>
-            <p class="field-help">가장 자신 있는 역할부터 3개를 선택하세요. 첫 번째 역할만 블라인드 픽에 공개됩니다.</p>
+            <p class="field-help">가장 자신 있는 역할부터 1·2·3순위로 선택하세요.</p>
             <div id="roleButtons" class="role-grid"></div>
             <div id="roleOrder" class="role-order"></div>
           </div>
@@ -143,11 +143,6 @@
           <h2>팀 편성</h2>
         </div>
         <div class="actions">
-          <label class="switch">
-            <input id="blindMode" type="checkbox" checked>
-            <span></span>
-            닉네임 블라인드
-          </label>
           <button class="secondary" id="clearTeams" type="button">
             <i data-lucide="eraser"></i> 초기화
           </button>
@@ -212,10 +207,11 @@
             <tr>
               <th>인게임 닉네임</th>
               <th>디스코드</th>
-              <th>주 역할</th>
-              <th>보조 역할</th>
+              <th>1순위 역할</th>
+              <th>2·3순위 역할</th>
               <th>MMR</th>
               <th>랭킹</th>
+              <th>승률</th>
               <th>모스트</th>
               <th>관리</th>
             </tr>

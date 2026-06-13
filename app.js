@@ -338,7 +338,10 @@ function updateRankPreview(data, stateName = "success") {
     wrap.className = "rank-empty";
     wrap.innerHTML = `<i data-lucide="circle-alert"></i><strong>조회하지 못했습니다</strong><p>${escapeHtml(data.message)}</p>`;
   } else {
-    const winRate = data.totalGames ? `${Math.round((data.totalWins / data.totalGames) * 100)}%` : "-";
+    const winRate = formatWinRate(data.totalWins, data.totalGames);
+    const winRecord = data.totalGames
+      ? `${formatNumber(data.totalWins, true)}승 / ${formatNumber(data.totalGames, true)}경기`
+      : "기록 없음";
     wrap.className = "rank-result";
     wrap.innerHTML = `
       <div class="rank-identity">
@@ -349,7 +352,7 @@ function updateRankPreview(data, stateName = "success") {
         <div><span>MMR</span><strong>${formatNumber(data.mmr)}</strong></div>
         <div><span>랭킹</span><strong>${data.rank ? `${formatNumber(data.rank)}위` : "-"}</strong></div>
         <div><span>랭크 게임</span><strong>${formatNumber(data.totalGames)}</strong></div>
-        <div><span>승률</span><strong>${winRate}</strong></div>
+        <div><span>승률</span><strong>${winRate}</strong><small>${winRecord}</small></div>
         <div><span>평균 순위</span><strong>${formatDecimal(data.averageRank)}</strong></div>
         <div><span>평균 킬</span><strong>${formatDecimal(data.averageKills)}</strong></div>
       </div>
@@ -379,6 +382,7 @@ function submitApplicant(event) {
     mmr: Number($("#manualMmr").value || rankCache?.mmr || 0),
     rank: Number($("#manualRank").value || rankCache?.rank || 0),
     totalGames: rankCache?.totalGames || 0,
+    totalWins: rankCache?.totalWins || 0,
     most: rankCache?.most || [],
     memo: $("#memo").value.trim(),
     createdAt: new Date().toISOString()
@@ -462,7 +466,6 @@ function teamTotal(teamId) {
 }
 
 function renderTeams() {
-  const blind = $("#blindMode").checked;
   $("#teamCount").textContent = state.teams.length;
   $("#teamsBoard").innerHTML = state.teams.map((team) => {
     const totalMmr = team.members.reduce((sum, id) => sum + Number(getApplicant(id)?.mmr || 0), 0);
@@ -470,11 +473,11 @@ function renderTeams() {
       const player = getApplicant(id);
       if (!player) return "";
       const captain = state.captains[team.id] === player.id;
-      if (blind) return `<li>${captain ? "팀장 · " : ""}픽 ${index + 1}<span class="role-tag">${escapeHtml(player.roles[0])}</span></li>`;
       const name = player.discordName ? `${player.discordName} (${player.nickname})` : player.nickname;
-      return `<li>${captain ? "팀장 · " : ""}${escapeHtml(name)}<span class="role-tag">${escapeHtml(player.roles[0])}</span><br><small>MMR ${formatNumber(player.mmr)} · ${escapeHtml(player.roles.slice(1).join(" / "))}</small></li>`;
+      const roleOrder = (player.roles || []).map((role, roleIndex) => `${roleIndex + 1}. ${role}`).join(" / ");
+      return `<li>${captain ? "팀장 · " : ""}${escapeHtml(name)}<span class="role-tag">${escapeHtml(player.roles?.[0] || "-")}</span><br><small>MMR ${formatNumber(player.mmr)} · ${escapeHtml(roleOrder || "역할군 미지정")}</small></li>`;
     }).join("");
-    return `<article class="team-card"><header><span>${team.name}</span><span>${blind ? `${team.members.length}명` : `합계 ${formatNumber(totalMmr)}`}</span></header><ol>${members}</ol></article>`;
+    return `<article class="team-card"><header><span>${team.name}</span><span>합계 ${formatNumber(totalMmr)}</span></header><ol>${members}</ol></article>`;
   }).join("") || `<p class="note">참가자를 등록한 뒤 자동 편성을 실행하세요.</p>`;
   renderCaptains();
 }
@@ -602,9 +605,10 @@ function renderApplicants() {
       <td>${escapeHtml(player.roles?.slice(1).join(" / ") || "-")}</td>
       <td>${formatNumber(player.mmr)}</td>
       <td>${player.rank ? `${formatNumber(player.rank)}위` : "-"}</td>
+      <td>${formatWinRate(player.totalWins, player.totalGames)}</td>
       <td>${escapeHtml(player.most?.join(" / ") || "-")}</td>
       <td><button class="danger" data-remove="${player.id}" type="button" aria-label="${escapeHtml(player.nickname)} 삭제"><i data-lucide="trash-2"></i></button></td>
-    </tr>`).join("") || `<tr><td colspan="8">등록된 참가자가 없습니다.</td></tr>`;
+    </tr>`).join("") || `<tr><td colspan="9">등록된 참가자가 없습니다.</td></tr>`;
 }
 
 function renderOverview() {
@@ -721,7 +725,6 @@ function bindEvents() {
     normalizeScores();
     saveState();
   });
-  $("#blindMode").addEventListener("change", renderTeams);
   $("#desiredTeams").addEventListener("change", readTeamControls);
   $("#teamSize").addEventListener("change", readTeamControls);
   $("#clearApplicants").addEventListener("click", () => {
@@ -796,12 +799,19 @@ function escapeHtml(value) {
   return String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#039;" })[char]);
 }
 
-function formatNumber(value) {
-  return Number.isFinite(Number(value)) && Number(value) !== 0 ? Number(value).toLocaleString("ko-KR") : "-";
+function formatNumber(value, showZero = false) {
+  return Number.isFinite(Number(value)) && (showZero || Number(value) !== 0) ? Number(value).toLocaleString("ko-KR") : "-";
 }
 
 function formatDecimal(value) {
   return Number.isFinite(Number(value)) ? Number(value).toFixed(2) : "-";
+}
+
+function formatWinRate(totalWins, totalGames) {
+  const games = Number(totalGames);
+  const wins = Number(totalWins);
+  if (!Number.isFinite(games) || games <= 0 || !Number.isFinite(wins)) return "-";
+  return `${((wins / games) * 100).toFixed(1)}%`;
 }
 
 async function bootstrap() {
