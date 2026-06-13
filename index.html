@@ -3,217 +3,206 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>이진서 내전 계산기</title>
+  <meta name="theme-color" content="#fffdf8">
+  <title>이터널 리턴 내전 계산기</title>
   <link rel="stylesheet" href="./style.css">
 </head>
 <body>
   <header class="topbar">
-    <div>
-      <p class="eyebrow">Eternal Return Custom Match</p>
-      <h1>이진서 내전 계산기</h1>
-    </div>
-    <div class="actions">
-      <button id="exportJson" type="button">백업</button>
-      <label class="file-button">
-        복원
+    <a class="brand" href="#overview">
+      <span class="brand-mark">ER</span>
+      <span>
+        <small>ETERNAL RETURN</small>
+        <strong>내전 계산기</strong>
+      </span>
+    </a>
+    <nav aria-label="주요 메뉴">
+      <a href="#applicants">참가 등록</a>
+      <a href="#teams">팀 편성</a>
+      <a href="#matches">경기 기록</a>
+      <a href="#roster">명단</a>
+    </nav>
+    <div class="top-actions">
+      <button class="icon-button" id="exportJson" type="button" title="JSON 백업" aria-label="JSON 백업">
+        <i data-lucide="download"></i>
+      </button>
+      <label class="icon-button" title="백업 복원" aria-label="백업 복원">
+        <i data-lucide="upload"></i>
         <input id="importJson" type="file" accept="application/json">
       </label>
+      <button class="icon-button" id="openSettings" type="button" title="설정" aria-label="설정">
+        <i data-lucide="settings-2"></i>
+      </button>
     </div>
   </header>
 
   <main>
-    <section class="hero compact-hero">
-      <div class="hero-copy">
-        <div>
-          <p class="eyebrow">Blind Scrim Desk</p>
-          <h2>내전 운영 현황</h2>
-        </div>
-        <div class="stats">
-          <span><small>신청</small><b id="applicantCount">0</b><em>명</em></span>
-          <span><small>편성</small><b id="teamCount">0</b><em>팀</em></span>
-          <span class="wide"><small>최근 저장</small><b id="savedAt">저장 대기</b></span>
-        </div>
+    <section class="overview" id="overview">
+      <div>
+        <p class="eyebrow">CUSTOM MATCH CONTROL</p>
+        <h1 id="eventTitle">이터널 리턴 내전</h1>
+        <p class="overview-meta">
+          <span id="seasonLabel">시즌 불러오는 중</span>
+          <span id="apiStatus" class="status-chip">API 확인 중</span>
+        </p>
+      </div>
+      <div class="summary-grid">
+        <article><span>참가자</span><strong id="applicantCount">0</strong><small>명</small></article>
+        <article><span>편성 팀</span><strong id="teamCount">0</strong><small>팀</small></article>
+        <article><span>경기</span><strong id="matchCountStat">4</strong><small>경기</small></article>
+        <article class="save-stat"><span>최근 저장</span><strong id="savedAt">저장 대기</strong></article>
       </div>
     </section>
 
-    <section class="panel settings-panel">
-      <div class="section-head">
-        <div>
-          <p class="eyebrow">API 설정</p>
-          <h2>랭크 자동 조회</h2>
+    <section class="workspace-grid" id="applicants">
+      <article class="panel registration-panel">
+        <div class="section-head">
+          <div>
+            <p class="section-number">01</p>
+            <h2>참가자 등록</h2>
+          </div>
+          <button class="text-button" id="resetForm" type="button">
+            <i data-lucide="rotate-ccw"></i> 초기화
+          </button>
         </div>
-        <button id="saveSettings" type="button">설정 저장</button>
-      </div>
-      <div class="settings-grid">
-        <label>API 키
-          <input id="apiKey" type="password" autocomplete="off" placeholder="developer.eternalreturn.io에서 발급받은 키">
-        </label>
-        <label>API 기본 주소
-          <input id="apiBase" type="url" value="https://open-api.bser.io/v1">
-        </label>
-        <label>시즌 ID
-          <input id="seasonId" type="number" min="1" value="10">
-        </label>
-        <label>팀 모드
-          <select id="teamMode">
-            <option value="3" selected>스쿼드</option>
-            <option value="1">솔로</option>
-            <option value="2">듀오</option>
-          </select>
-        </label>
-        <label class="option-check">
-          <input id="tournamentScoring" type="checkbox" checked>
-          대회 점수 산정 적용
-        </label>
-      </div>
-      <div class="rule-grid">
-        <label>등수 점수 (1~8등)
-          <input id="placementPoints" placeholder="10,7,5,4,3,2,1,0">
-        </label>
-        <label>1일차 킬
-          <input id="day1KillPoint" type="number" step="0.5" min="0">
-        </label>
-        <label>2일차 이후 킬
-          <input id="lateKillPoint" type="number" step="0.5" min="0">
-        </label>
-        <label>금구사 패널티
-          <input id="penaltyDeathPoint" type="number" step="0.5" min="0">
-        </label>
-      </div>
-      <p class="note">공식 API의 시즌 ID는 게임 안에서 보이는 시즌 번호와 다를 수 있어 필요하면 여기서 조정합니다.</p>
+
+        <form id="applicantForm" class="applicant-form">
+          <div class="lookup-row">
+            <label>인게임 닉네임
+              <input id="nickname" required autocomplete="off" placeholder="닉네임을 정확히 입력">
+            </label>
+            <button id="lookupRank" class="lookup-button" type="button">
+              <i data-lucide="search"></i> 랭크 조회
+            </button>
+          </div>
+
+          <label>디스코드 닉네임
+            <input id="discordName" autocomplete="off" placeholder="선택 입력">
+          </label>
+
+          <div>
+            <p class="field-title">역할군 우선순위</p>
+            <p class="field-help">가장 자신 있는 역할부터 3개를 선택하세요. 첫 번째 역할만 블라인드 픽에 공개됩니다.</p>
+            <div id="roleButtons" class="role-grid"></div>
+            <div id="roleOrder" class="role-order"></div>
+          </div>
+
+          <div class="form-grid">
+            <label>수동 MMR
+              <input id="manualMmr" type="number" min="0" placeholder="조회 실패 시">
+            </label>
+            <label>메모
+              <input id="memo" placeholder="운영자 확인사항">
+            </label>
+          </div>
+          <input id="manualRank" type="hidden">
+          <input id="most1" type="hidden">
+          <input id="most2" type="hidden">
+          <input id="most3" type="hidden">
+
+          <button class="primary" type="submit">
+            <i data-lucide="user-plus"></i> 참가자 등록
+          </button>
+        </form>
+      </article>
+
+      <aside class="panel rank-panel">
+        <div class="section-head">
+          <div>
+            <p class="section-number">LIVE</p>
+            <h2>랭크 정보</h2>
+          </div>
+          <span class="api-dot" id="rankApiDot"></span>
+        </div>
+        <div class="rank-empty" id="rankPreview">
+          <i data-lucide="scan-search"></i>
+          <strong>닉네임을 조회해 주세요</strong>
+          <p>현재 선택한 시즌의 스쿼드 랭크를 불러옵니다.</p>
+        </div>
+      </aside>
     </section>
 
-    <section class="panel">
+    <section class="panel" id="teams">
       <div class="section-head">
         <div>
-          <p class="eyebrow">신청</p>
-          <h2>참가자 등록</h2>
-        </div>
-        <button id="resetForm" type="button">초기화</button>
-      </div>
-
-      <form id="applicantForm" class="applicant-form">
-        <div class="lookup-row">
-          <label>인게임 닉네임
-            <input id="nickname" required placeholder="닉네임 입력 후 조회">
-          </label>
-          <label>디코 닉네임
-            <input id="discordName" placeholder="신청자 표시명">
-          </label>
-          <button id="lookupRank" type="button">랭크 조회</button>
-        </div>
-
-        <div class="rank-preview" id="rankPreview">
-          <span>조회 전</span>
-          <span>MMR -</span>
-          <span>랭킹 -</span>
-          <span>랭크 게임 -</span>
-        </div>
-
-        <div>
-          <p class="field-title">역할군 3개 선택</p>
-          <div id="roleButtons" class="role-grid"></div>
-          <div id="roleOrder" class="role-order"></div>
-        </div>
-
-        <div class="manual-grid">
-          <label>수동 MMR
-            <input id="manualMmr" type="number" min="0" placeholder="자동 조회 실패 시">
-          </label>
-          <label>수동 랭킹
-            <input id="manualRank" type="number" min="1" placeholder="선택">
-          </label>
-          <label>메모
-            <input id="memo" placeholder="주 실험체, 확인사항 등">
-          </label>
-        </div>
-
-        <div class="manual-grid">
-          <label>모스트 1
-            <input id="most1" placeholder="키아라">
-          </label>
-          <label>모스트 2
-            <input id="most2" placeholder="이렘">
-          </label>
-          <label>모스트 3
-            <input id="most3" placeholder="바냐">
-          </label>
-        </div>
-
-        <button class="primary" type="submit">신청 완료</button>
-      </form>
-    </section>
-
-    <section class="panel">
-      <div class="section-head">
-        <div>
-          <p class="eyebrow">블라인드</p>
-          <h2>팀원 뽑기</h2>
+          <p class="section-number">02</p>
+          <h2>팀 편성</h2>
         </div>
         <div class="actions">
-          <button id="makeTeams" type="button">자동 편성</button>
-          <button id="clearTeams" type="button">팀 초기화</button>
+          <label class="switch">
+            <input id="blindMode" type="checkbox" checked>
+            <span></span>
+            닉네임 블라인드
+          </label>
+          <button class="secondary" id="clearTeams" type="button">
+            <i data-lucide="eraser"></i> 초기화
+          </button>
+          <button class="primary compact" id="makeTeams" type="button">
+            <i data-lucide="shuffle"></i> 자동 편성
+          </button>
         </div>
       </div>
       <div class="team-controls">
         <label>팀 수
           <input id="desiredTeams" type="number" min="2" max="12" value="8">
         </label>
-        <label>한 팀 인원
+        <label>팀당 인원
           <input id="teamSize" type="number" min="1" max="4" value="3">
         </label>
-        <label class="toggle">
-          <input id="blindMode" type="checkbox" checked>
-          닉네임 블라인드
-        </label>
+        <p>MMR 순으로 정렬한 뒤 스네이크 방식으로 균형을 맞춥니다.</p>
       </div>
       <div id="captainBoard" class="captain-board"></div>
       <div id="teamsBoard" class="teams-board"></div>
     </section>
 
-    <section class="panel">
+    <section class="panel" id="matches">
       <div class="section-head">
         <div>
-          <p class="eyebrow">점수</p>
-          <h2>4경기 계산</h2>
+          <p class="section-number">03</p>
+          <h2>경기 기록</h2>
         </div>
-        <button id="exportCsv" type="button">CSV 내보내기</button>
+        <button class="secondary" id="exportCsv" type="button">
+          <i data-lucide="file-spreadsheet"></i> CSV
+        </button>
       </div>
       <div id="replayBoard" class="replay-board"></div>
-      <div class="score-layout">
-        <div id="banBoard" class="ban-board"></div>
-        <aside>
-          <div id="roundBanSummary" class="side-box"></div>
-          <div id="banSummary" class="side-box"></div>
-          <div id="scoreRuleBox" class="side-box"></div>
-          <div id="rankRuleBox" class="side-box rank-rule"></div>
-        </aside>
-      </div>
       <div id="scoreSummary" class="score-summary"></div>
       <div id="scoreBoard" class="score-board"></div>
+      <details class="ban-details">
+        <summary><i data-lucide="shield-ban"></i> 밴 페이즈 기록</summary>
+        <div class="score-layout">
+          <div id="banBoard" class="ban-board"></div>
+          <aside>
+            <div id="roundBanSummary" class="side-box"></div>
+            <div id="banSummary" class="side-box"></div>
+            <div id="scoreRuleBox" class="side-box"></div>
+            <div id="rankRuleBox" class="side-box rank-rule"></div>
+          </aside>
+        </div>
+      </details>
     </section>
 
-    <section class="panel">
+    <section class="panel" id="roster">
       <div class="section-head">
         <div>
-          <p class="eyebrow">명단</p>
-          <h2>참가자 목록</h2>
+          <p class="section-number">04</p>
+          <h2>참가자 명단</h2>
         </div>
-        <button id="clearApplicants" type="button">명단 비우기</button>
+        <button class="danger" id="clearApplicants" type="button">
+          <i data-lucide="trash-2"></i> 전체 삭제
+        </button>
       </div>
       <div class="table-wrap">
-        <table>
+        <table class="roster-table">
           <thead>
             <tr>
-              <th>닉네임</th>
-              <th>공개 역할</th>
-              <th>역할 2</th>
-              <th>역할 3</th>
-              <th>디코</th>
-              <th>모스트</th>
+              <th>인게임 닉네임</th>
+              <th>디스코드</th>
+              <th>주 역할</th>
+              <th>보조 역할</th>
               <th>MMR</th>
               <th>랭킹</th>
-              <th>구분</th>
+              <th>모스트</th>
               <th>관리</th>
             </tr>
           </thead>
@@ -223,6 +212,82 @@
     </section>
   </main>
 
+  <dialog id="settingsDialog">
+    <form method="dialog" class="settings-dialog">
+      <div class="dialog-head">
+        <div>
+          <p class="eyebrow">MATCH SETTINGS</p>
+          <h2>내전 설정</h2>
+        </div>
+        <button class="icon-button" value="cancel" title="닫기" aria-label="닫기">
+          <i data-lucide="x"></i>
+        </button>
+      </div>
+
+      <fieldset>
+        <legend>기본 설정</legend>
+        <div class="settings-grid">
+          <label>내전 이름
+            <input id="eventName" maxlength="40" placeholder="이터널 리턴 내전">
+          </label>
+          <label>시즌
+            <select id="seasonId"></select>
+          </label>
+          <label>경기 수
+            <input id="matchCount" type="number" min="1" max="12" value="4">
+          </label>
+          <label>랭크 모드
+            <select id="teamMode">
+              <option value="3">스쿼드</option>
+              <option value="2">듀오</option>
+              <option value="1">솔로</option>
+            </select>
+          </label>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Open API</legend>
+        <div class="api-key-row">
+          <label>API 키
+            <input id="apiKey" type="password" autocomplete="off" placeholder="이 브라우저에만 저장됩니다">
+          </label>
+          <button id="testApi" class="secondary" type="button">
+            <i data-lucide="plug-zap"></i> 연결 확인
+          </button>
+        </div>
+        <input id="apiBase" type="hidden" value="https://open-api.bser.io">
+        <p class="note">API 키는 GitHub 저장소에 업로드하지 않으며 현재 브라우저의 로컬 저장소에만 보관됩니다.</p>
+      </fieldset>
+
+      <fieldset>
+        <legend>대회 점수룰</legend>
+        <label class="option-check">
+          <input id="tournamentScoring" type="checkbox" checked>
+          대회 점수 산정 적용
+        </label>
+        <div class="rule-grid">
+          <label>등수 점수 (1~8등)
+            <input id="placementPoints" placeholder="10,7,5,4,3,2,1,0">
+          </label>
+          <label>1일차 킬
+            <input id="day1KillPoint" type="number" step="0.5" min="0">
+          </label>
+          <label>2일차 이후 킬
+            <input id="lateKillPoint" type="number" step="0.5" min="0">
+          </label>
+          <label>금구사
+            <input id="penaltyDeathPoint" type="number" step="0.5" min="0">
+          </label>
+        </div>
+      </fieldset>
+
+      <button id="saveSettings" class="primary" type="button">
+        <i data-lucide="save"></i> 설정 저장
+      </button>
+    </form>
+  </dialog>
+
   <template id="matchTemplate">
     <article class="match-card">
       <h3></h3>
@@ -230,6 +295,9 @@
     </article>
   </template>
 
+  <div id="toast" role="status" aria-live="polite"></div>
+
+  <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
   <script src="./app.js"></script>
 </body>
 </html>
