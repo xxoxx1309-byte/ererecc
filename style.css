@@ -13,12 +13,13 @@
   --page: #f7f4ef;
   --surface: #fffdf8;
   --surface-2: #f1ece5;
-  --ink: #272523;
-  --muted: #77716b;
+  --ink: #1f1d1b;
+  --muted: #57514c;
+  --subtle: #6b645e;
   --line: #ded7ce;
   --rose: #ff4e50;
   --rose-soft: #ffe0da;
-  --green: #7b5900;
+  --green: #664900;
   --green-soft: #fff2bd;
   --gold: #f9d423;
   --accent-gradient: linear-gradient(120deg, #ff4e50 0%, #f9d423 100%);
@@ -139,7 +140,7 @@ nav {
 }
 
 nav a {
-  color: var(--muted);
+  color: #4b4642;
   text-decoration: none;
   font-family: var(--heading);
   font-size: 14px;
@@ -184,14 +185,14 @@ main {
   align-items: center;
   gap: 30px;
   padding: clamp(26px, 5vw, 48px);
-  color: #2b251b;
+  color: #181512;
   background: var(--accent-gradient);
   border-radius: 8px;
   box-shadow: var(--shadow);
 }
 
 .eyebrow, .section-number {
-  color: #9d3032;
+  color: #7d2528;
   font-family: var(--heading);
   font-size: 11px;
   font-weight: 900;
@@ -209,7 +210,8 @@ main {
   align-items: center;
   gap: 10px;
   margin-top: 12px;
-  color: rgba(43, 37, 27, .7);
+  color: rgba(31, 25, 19, .86);
+  font-weight: 650;
   font-size: 13px;
 }
 
@@ -238,9 +240,9 @@ main {
   border-radius: 7px;
 }
 
-.summary-grid span { color: rgba(43,37,27,.62); font-size: 11px; font-weight: 700; }
+.summary-grid span { color: rgba(31,25,19,.78); font-size: 11px; font-weight: 800; }
 .summary-grid strong { font-family: var(--heading); font-size: 25px; }
-.summary-grid small { color: rgba(43,37,27,.62); font-size: 11px; }
+.summary-grid small { color: rgba(31,25,19,.78); font-size: 11px; font-weight: 700; }
 .save-stat strong { margin-top: 5px; font-family: var(--body); font-size: 13px; line-height: 1.35; }
 
 .workspace-grid {
@@ -281,7 +283,7 @@ main {
 label {
   display: grid;
   gap: 7px;
-  color: var(--muted);
+  color: #3f3a36;
   font-family: var(--heading);
   font-size: 12px;
   font-weight: 750;
@@ -297,6 +299,11 @@ input, select, textarea {
   border-radius: 7px;
 }
 
+input::placeholder, textarea::placeholder {
+  color: #756e68;
+  opacity: 1;
+}
+
 input, select { min-height: 43px; }
 textarea { resize: vertical; line-height: 1.65; }
 
@@ -306,7 +313,7 @@ input:focus, select:focus, textarea:focus {
 }
 
 .field-title { font-family: var(--heading); font-weight: 800; }
-.field-help, .note { margin-top: 4px; color: var(--muted); font-size: 12px; line-height: 1.55; }
+.field-help, .note { margin-top: 4px; color: var(--subtle); font-size: 12px; font-weight: 520; line-height: 1.55; }
 
 .form-grid { display: grid; grid-template-columns: .65fr 1.35fr; gap: 10px; }
 
@@ -320,7 +327,7 @@ input:focus, select:focus, textarea:focus {
 .role-grid button {
   min-height: 39px;
   padding: 7px;
-  color: var(--muted);
+  color: #514b46;
   background: #fff;
   border: 1px solid var(--line);
   font-size: 12px;
@@ -361,7 +368,7 @@ input:focus, select:focus, textarea:focus {
   align-content: center;
   gap: 8px;
   padding: 24px;
-  color: var(--muted);
+  color: var(--subtle);
   text-align: center;
   background: var(--surface-2);
   border: 1px dashed #cfc6bc;
@@ -375,10 +382,10 @@ input:focus, select:focus, textarea:focus {
 .rank-result { display: grid; gap: 12px; }
 .rank-identity { padding-bottom: 14px; border-bottom: 1px solid var(--line); }
 .rank-identity strong { display: block; font-family: var(--heading); font-size: 24px; }
-.rank-identity span { color: var(--muted); font-size: 12px; }
+.rank-identity span { color: var(--subtle); font-size: 12px; }
 .rank-metrics { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
 .rank-metrics div { padding: 12px; background: var(--surface-2); border-radius: 7px; }
-.rank-metrics span { display: block; color: var(--muted); font-size: 11px; }
+.rank-metrics span { display: block; color: var(--subtle); font-size: 11px; font-weight: 650; }
 .rank-metrics strong { display: block; margin-top: 4px; font-family: var(--heading); font-size: 19px; }
 .most-list { display: flex; flex-wrap: wrap; gap: 6px; }
 
@@ -401,7 +408,7 @@ input:focus, select:focus, textarea:focus {
 }
 
 .event-fact span {
-  color: var(--muted);
+  color: var(--subtle);
   font-family: var(--heading);
   font-size: 10px;
   font-weight: 800;
@@ -424,7 +431,8 @@ input:focus, select:focus, textarea:focus {
 }
 
 .rules-display.empty {
-  color: var(--muted);
+  color: var(--subtle);
+  font-weight: 550;
   text-align: center;
   border-style: dashed;
 }
@@ -437,7 +445,7 @@ input:focus, select:focus, textarea:focus {
   margin-bottom: 18px;
 }
 
-.team-controls p { align-self: center; color: var(--muted); font-size: 12px; }
+.team-controls p { align-self: center; color: var(--subtle); font-size: 12px; font-weight: 520; }
 
 .switch {
   display: inline-flex;
@@ -480,7 +488,7 @@ input:focus, select:focus, textarea:focus {
 
 .team-card ol { min-height: 120px; margin: 0; padding: 8px 12px 12px 34px; }
 .team-card li { margin: 9px 0; line-height: 1.35; }
-.team-card small { color: var(--muted); font-size: 11px; }
+.team-card small { color: var(--subtle); font-size: 11px; }
 
 .role-tag {
   display: inline-block;
@@ -509,7 +517,7 @@ input:focus, select:focus, textarea:focus {
 .sheet-table { min-width: 720px; border: 1px solid var(--line); }
 .sheet-table caption { padding: 9px; color: var(--ink); background: var(--rose-soft); font-family: var(--heading); font-weight: 800; }
 th, td { padding: 10px; border-bottom: 1px solid var(--line); text-align: left; white-space: nowrap; }
-th { color: var(--muted); background: var(--surface-2); font-family: var(--heading); font-size: 12px; }
+th { color: #46413d; background: var(--surface-2); font-family: var(--heading); font-size: 12px; }
 .sheet-table th, .sheet-table td { text-align: center; border-right: 1px solid var(--line); }
 .sheet-table input { min-height: 33px; padding: 5px 7px; text-align: center; }
 
@@ -517,7 +525,7 @@ th { color: var(--muted); background: var(--surface-2); font-family: var(--headi
 .match-card h3 { padding: 10px 13px; color: #fff; background: var(--green); font-size: 15px; }
 .match-grid { display: grid; grid-template-columns: 1.1fr repeat(4, .7fr); gap: 1px; background: var(--line); }
 .match-grid > * { padding: 8px; background: #fff; }
-.match-grid > b { color: var(--muted); background: var(--surface-2); font-family: var(--heading); font-size: 11px; }
+.match-grid > b { color: #46413d; background: var(--surface-2); font-family: var(--heading); font-size: 11px; }
 .match-grid input, .match-grid select { min-height: 35px; padding: 5px 7px; }
 
 .ban-details { margin-top: 16px; border-top: 1px solid var(--line); }
