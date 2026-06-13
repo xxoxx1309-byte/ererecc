@@ -54,6 +54,20 @@
       </div>
     </section>
 
+    <section class="panel notice-panel" id="notice">
+      <div class="section-head">
+        <div>
+          <p class="section-number">NOTICE</p>
+          <h2>내전 안내</h2>
+        </div>
+        <button class="text-button" id="editNotice" type="button">
+          <i data-lucide="pencil"></i> 안내 수정
+        </button>
+      </div>
+      <div id="eventFacts" class="event-facts"></div>
+      <div id="rulesDisplay" class="rules-display"></div>
+    </section>
+
     <section class="workspace-grid" id="applicants">
       <article class="panel registration-panel">
         <div class="section-head">
@@ -244,6 +258,33 @@
             </select>
           </label>
         </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>내전 안내</legend>
+        <div class="notice-grid">
+          <label>일정
+            <input id="eventDate" placeholder="예: 6.13 (토)">
+          </label>
+          <label>진행
+            <input id="eventHost" placeholder="진행자 / 캐스터">
+          </label>
+          <label>시간
+            <input id="eventTime" placeholder="예: 오후 10시~12시">
+          </label>
+          <label>티어 제한
+            <input id="tierLimit" placeholder="예: 제한 없음">
+          </label>
+          <label>팀 방식
+            <input id="teamFormat" placeholder="예: 듀오, 스쿼드">
+          </label>
+          <label>인원
+            <input id="capacity" placeholder="예: 16/16">
+          </label>
+        </div>
+        <label class="rules-field">내전 규칙
+          <textarea id="eventRules" rows="10" placeholder="마이크, 지각, 중도 참가/포기, 픽 제한, 아이템 제한 등 참가자가 알아야 할 내용을 자유롭게 작성하세요."></textarea>
+        </label>
       </fieldset>
 
       <fieldset>
