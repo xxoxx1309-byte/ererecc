@@ -4,6 +4,97 @@ const API_BASE = "https://open-api.bser.io";
 const DEFAULT_SEASON_ID = 39;
 const STATE_VERSION = 4;
 const ROLES = ["스증원딜", "평원딜", "공격력브루저", "스증브루저", "암살자", "서포터", "탱커"];
+const KOREAN_CHARACTER_NAMES = {
+  1: "재키",
+  2: "아야",
+  3: "피오라",
+  4: "매그너스",
+  5: "자히르",
+  6: "나딘",
+  7: "현우",
+  8: "하트",
+  9: "아이솔",
+  10: "리 다이린",
+  11: "유키",
+  12: "혜진",
+  13: "쇼우",
+  14: "키아라",
+  15: "시셀라",
+  16: "실비아",
+  17: "아드리아나",
+  18: "쇼이치",
+  19: "엠마",
+  20: "레녹스",
+  21: "로지",
+  22: "루크",
+  23: "캐시",
+  24: "아델라",
+  25: "버니스",
+  26: "바바라",
+  27: "알렉스",
+  28: "수아",
+  29: "레온",
+  30: "일레븐",
+  31: "리오",
+  32: "윌리엄",
+  33: "니키",
+  34: "나타폰",
+  35: "얀",
+  36: "이바",
+  37: "다니엘",
+  38: "제니",
+  39: "카밀로",
+  40: "클로에",
+  41: "요한",
+  42: "비앙카",
+  43: "셀린",
+  44: "에키온",
+  45: "마이",
+  46: "에이든",
+  47: "라우라",
+  48: "띠아",
+  49: "펠릭스",
+  50: "엘레나",
+  51: "프리야",
+  52: "아디나",
+  53: "마커스",
+  54: "칼라",
+  55: "에스텔",
+  56: "피올로",
+  57: "마르티나",
+  58: "헤이즈",
+  59: "아이작",
+  60: "타지아",
+  61: "이렘",
+  62: "테오도르",
+  63: "이안",
+  64: "바냐",
+  65: "데비&마를렌",
+  66: "아르다",
+  67: "아비게일",
+  68: "알론소",
+  69: "레니",
+  70: "츠바메",
+  71: "케네스",
+  72: "카티야",
+  73: "샬럿",
+  74: "다르코",
+  75: "르노어",
+  76: "가넷",
+  77: "유민",
+  78: "히스이",
+  79: "유스티나",
+  80: "이슈트반",
+  81: "니아",
+  82: "슈린",
+  83: "헨리",
+  84: "블레어",
+  85: "미르카",
+  86: "펜리르",
+  87: "코렐라인",
+  88: "비형",
+  89: "크레이버"
+};
 const DEFAULT_SCORE_RULE = {
   placement: [10, 7, 5, 4, 3, 2, 1, 0],
   day1Kill: 0.5,
@@ -15,7 +106,7 @@ let state = loadState();
 let selectedRoles = [];
 let rankCache = null;
 let seasons = [];
-let characterNames = new Map();
+let characterNames = koreanCharacterNameMap();
 let toastTimer = null;
 let currentView = location.hash === "#admin" ? "admin" : "apply";
 
@@ -222,7 +313,13 @@ async function refreshApiMetadata(showMessage = false) {
       erFetch("v2/data/Character")
     ]);
     seasons = (seasonJson.data || []).filter((season) => !/pre/i.test(season.seasonName));
-    characterNames = new Map((characterJson.data || []).map((character) => [Number(character.code), characterDisplayName(character)]));
+    characterNames = koreanCharacterNameMap();
+    (characterJson.data || []).forEach((character) => {
+      const code = Number(character.code);
+      if (!characterNames.has(code)) characterNames.set(code, character.name || character.resource || `실험체 #${character.code}`);
+    });
+    const koreanNames = await loadKoreanCharacterNames();
+    koreanNames.forEach((name, code) => characterNames.set(code, name));
     const hasSelected = seasons.some((season) => Number(season.seasonID) === Number(state.settings.seasonId));
     if (!hasSelected) state.settings.seasonId = DEFAULT_SEASON_ID;
     populateSeasonSelect();
@@ -322,7 +419,8 @@ async function lookupRank() {
       .sort((a, b) => Number(b.usages || b.totalGames || 0) - Number(a.usages || a.totalGames || 0))
       .slice(0, 3)
       .map((item) => ({
-        name: characterNames.get(Number(item.characterCode)) || `Character #${item.characterCode}`,
+        characterCode: Number(item.characterCode),
+        name: characterNames.get(Number(item.characterCode)) || `실험체 #${item.characterCode}`,
         totalGames: Number(item.totalGames || item.usages || 0),
         wins: Number(item.wins || 0)
       }));
@@ -942,8 +1040,34 @@ function formatWinRate(totalWins, totalGames) {
   return `${((wins / games) * 100).toFixed(1)}%`;
 }
 
-function characterDisplayName(character) {
-  return character.resource || character.name || `Character #${character.code}`;
+async function fetchKoreanCharacterNames(l10nPath) {
+  const names = new Map();
+  if (!l10nPath) return names;
+  try {
+    const response = await fetch(l10nPath, { cache: "no-store" });
+    if (!response.ok) return names;
+    const text = await response.text();
+    text.split(/\r?\n/).forEach((line) => {
+      const match = line.match(/^Character\/Name\/(\d+)┃(.+)$/);
+      if (match) names.set(Number(match[1]), match[2].trim());
+    });
+  } catch {
+    // If the localization file is unavailable, keep API default names.
+  }
+  return names;
+}
+
+async function loadKoreanCharacterNames() {
+  try {
+    const l10nJson = await erFetch("v1/l10n/Korean");
+    return fetchKoreanCharacterNames(l10nJson.data?.l10Path);
+  } catch {
+    return new Map();
+  }
+}
+
+function koreanCharacterNameMap() {
+  return new Map(Object.entries(KOREAN_CHARACTER_NAMES).map(([code, name]) => [Number(code), name]));
 }
 
 function renderMostStats(data) {
@@ -953,7 +1077,7 @@ function renderMostStats(data) {
       <article class="most-stat">
         <span class="most-rank">${index + 1}</span>
         <div>
-          <strong>${escapeHtml(item.name)}</strong>
+          <strong>${escapeHtml(characterNameForStat(item))}</strong>
           <small>${formatNumber(item.wins, true)}승 / ${formatNumber(item.totalGames, true)}경기</small>
         </div>
         <b>${formatWinRate(item.wins, item.totalGames)}</b>
@@ -973,10 +1097,16 @@ function renderMostStats(data) {
 function renderRosterMost(player) {
   if (Array.isArray(player.mostStats) && player.mostStats.length) {
     return player.mostStats.map((item) =>
-      `<span><strong>${escapeHtml(item.name)}</strong> ${formatWinRate(item.wins, item.totalGames)}</span>`
+      `<span><strong>${escapeHtml(characterNameForStat(item))}</strong> ${formatWinRate(item.wins, item.totalGames)}</span>`
     ).join("");
   }
   return escapeHtml(player.most?.join(" / ") || "-");
+}
+
+function characterNameForStat(item) {
+  const code = Number(item.characterCode);
+  if (Number.isFinite(code) && characterNames.has(code)) return characterNames.get(code);
+  return item.name || (Number.isFinite(code) ? `실험체 #${code}` : "실험체");
 }
 
 async function bootstrap() {
