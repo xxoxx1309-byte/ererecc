@@ -591,6 +591,7 @@ function teamTotal(teamId) {
 function renderTeams() {
   $("#teamCount").textContent = state.teams.length;
   renderDraftBoard();
+  renderTailRuleBoard();
   $("#teamsBoard").innerHTML = state.teams.map((team) => {
     const totalMmr = team.members.reduce((sum, id) => sum + Number(getApplicant(id)?.mmr || 0), 0);
     const members = team.members.map((id, index) => {
@@ -604,6 +605,27 @@ function renderTeams() {
     return `<article class="team-card"><header><span>${team.name}</span><span>합계 ${formatNumber(totalMmr)}</span></header><ol>${members}</ol></article>`;
   }).join("") || `<p class="note">참가자를 등록한 뒤 자동 편성을 실행하세요.</p>`;
   renderCaptains();
+}
+
+function tailRuleTeams() {
+  if (state.teams.length) return state.teams.map((team) => team.name);
+  const count = Math.min(12, Math.max(2, Number(state.settings.desiredTeams || 8)));
+  return Array.from({ length: count }, (_, index) => `${index + 1}팀`);
+}
+
+function renderTailRuleBoard() {
+  const board = $("#tailRuleBoard");
+  if (!board) return;
+  const teams = tailRuleTeams();
+  board.innerHTML = teams.map((team, index) => {
+    const blocked = teams[(index + 1) % teams.length];
+    return `
+      <article class="tail-rule-card">
+        <span>${escapeHtml(team)}</span>
+        <strong>${escapeHtml(blocked)} 금지</strong>
+        <small>${escapeHtml(team)}은 ${escapeHtml(blocked)}을 잡으면 안 됩니다.</small>
+      </article>`;
+  }).join("");
 }
 
 function sortedApplicantsByMmr(ascending = false) {
