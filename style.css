@@ -497,6 +497,112 @@ input:focus, select:focus, textarea:focus {
 
 .team-controls p { align-self: center; color: var(--subtle); font-size: 12px; font-weight: 520; }
 
+.draft-helper {
+  display: grid;
+  gap: 12px;
+  margin: 16px 0;
+  padding: 14px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+}
+
+.draft-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.draft-actions {
+  display: flex;
+  align-items: end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.draft-actions label { min-width: 140px; }
+
+.draft-board {
+  display: grid;
+  grid-template-columns: .9fr 1.2fr 1.2fr;
+  gap: 10px;
+}
+
+.draft-column {
+  min-width: 0;
+  padding: 10px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+}
+
+.draft-column h3 {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  font-family: var(--heading);
+  font-size: 15px;
+}
+
+.draft-column h3 span {
+  color: var(--rose);
+}
+
+.draft-list {
+  display: grid;
+  gap: 6px;
+  max-height: 360px;
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.draft-player {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  align-items: center;
+  justify-items: start;
+  gap: 2px 8px;
+  min-height: 54px;
+  padding: 8px;
+  color: var(--ink);
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  text-align: left;
+}
+
+.draft-player span {
+  grid-row: span 2;
+  display: grid;
+  width: 24px;
+  aspect-ratio: 1;
+  place-items: center;
+  color: #6c3e00;
+  background: #fff0bd;
+  border-radius: 4px;
+  font-family: var(--heading);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.draft-player strong {
+  overflow: hidden;
+  max-width: 100%;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.draft-player small {
+  color: var(--subtle);
+  font-size: 11px;
+}
+
+.draft-player.pick:hover { border-color: var(--rose); background: #fff7ee; }
+.draft-player.unpick { border-color: #eac3aa; background: #fff5ef; }
+.draft-player.captain { cursor: default; opacity: .78; }
+
 .switch {
   display: inline-flex;
   grid-template-columns: auto auto auto;
@@ -648,6 +754,7 @@ legend { padding: 0 7px; font-size: 15px; }
   .settings-grid, .rule-grid { grid-template-columns: repeat(2, 1fr); }
   .event-facts { grid-template-columns: repeat(3, 1fr); }
   .notice-grid { grid-template-columns: repeat(2, 1fr); }
+  .draft-board { grid-template-columns: 1fr; }
   .captain-grid, .replay-grid { grid-template-columns: repeat(2, 1fr); }
 }
 
@@ -662,6 +769,7 @@ legend { padding: 0 7px; font-size: 15px; }
   .save-stat { grid-column: 1 / -1; }
   .section-head { align-items: flex-start; flex-direction: column; }
   .lookup-row, .form-grid, .team-controls, .settings-grid, .api-key-row, .rule-grid, .notice-grid { grid-template-columns: 1fr; }
+  .draft-head, .draft-actions { align-items: stretch; flex-direction: column; }
   .event-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .role-grid { grid-template-columns: repeat(2, 1fr); }
   .captain-grid, .replay-grid { grid-template-columns: 1fr; }

@@ -48,6 +48,10 @@ function defaultState() {
     applicants: [],
     teams: [],
     captains: {},
+    draft: {
+      captainMode: "high",
+      picked: []
+    },
     replayCodes: ["", "", "", ""],
     scores: Array.from({ length: 4 }, () => ({})),
     updatedAt: null
@@ -86,6 +90,11 @@ function normalizeState(saved, isLegacy = false) {
   normalized.eventInfo = { ...base.eventInfo, ...(saved.eventInfo || {}) };
   normalized.teams = Array.isArray(saved.teams) ? saved.teams : [];
   normalized.captains = saved.captains || {};
+  normalized.draft = {
+    ...base.draft,
+    ...(saved.draft || {}),
+    picked: Array.isArray(saved.draft?.picked) ? saved.draft.picked : []
+  };
   normalized.replayCodes = Array.isArray(saved.replayCodes) ? saved.replayCodes : [];
   normalized.scores = Array.isArray(saved.scores) ? saved.scores : [];
   syncMatchArrays(normalized);
@@ -126,6 +135,7 @@ function bindSettings() {
   $("#matchCount").value = state.settings.matchCount;
   $("#desiredTeams").value = state.settings.desiredTeams || 8;
   $("#teamSize").value = state.settings.teamSize || 3;
+  $("#draftCaptainMode").value = state.draft?.captainMode || "high";
   $("#tournamentScoring").checked = state.settings.tournamentScoring !== false;
   $("#placementPoints").value = currentScoreRule().placement.join(",");
   $("#day1KillPoint").value = currentScoreRule().day1Kill;
@@ -482,6 +492,7 @@ function teamTotal(teamId) {
 
 function renderTeams() {
   $("#teamCount").textContent = state.teams.length;
+  renderDraftBoard();
   $("#teamsBoard").innerHTML = state.teams.map((team) => {
     const totalMmr = team.members.reduce((sum, id) => sum + Number(getApplicant(id)?.mmr || 0), 0);
     const members = team.members.map((id, index) => {
@@ -495,6 +506,61 @@ function renderTeams() {
     return `<article class="team-card"><header><span>${team.name}</span><span>합계 ${formatNumber(totalMmr)}</span></header><ol>${members}</ol></article>`;
   }).join("") || `<p class="note">참가자를 등록한 뒤 자동 편성을 실행하세요.</p>`;
   renderCaptains();
+}
+
+function sortedApplicantsByMmr(ascending = false) {
+  return state.applicants
+    .slice()
+    .sort((a, b) => ascending
+      ? Number(a.mmr || 0) - Number(b.mmr || 0)
+      : Number(b.mmr || 0) - Number(a.mmr || 0));
+}
+
+function draftCaptainIds() {
+  const count = Math.min(Number(state.settings.desiredTeams || 8), state.applicants.length);
+  return sortedApplicantsByMmr(state.draft?.captainMode === "low").slice(0, count).map((player) => player.id);
+}
+
+function renderDraftBoard() {
+  const board = $("#draftBoard");
+  if (!board) return;
+  if ($("#draftCaptainMode")) $("#draftCaptainMode").value = state.draft?.captainMode || "high";
+  const validIds = new Set(state.applicants.map((player) => player.id));
+  state.draft.picked = (state.draft.picked || []).filter((id) => validIds.has(id));
+  if (!state.applicants.length) {
+    board.innerHTML = `<p class="note">참가자를 등록하면 팀장 후보와 남은 인원이 표시됩니다.</p>`;
+    return;
+  }
+  const captainIds = new Set(draftCaptainIds());
+  const pickedIds = new Set(state.draft.picked || []);
+  const captains = sortedApplicantsByMmr(state.draft?.captainMode === "low").filter((player) => captainIds.has(player.id));
+  const remaining = sortedApplicantsByMmr().filter((player) => !captainIds.has(player.id) && !pickedIds.has(player.id));
+  const picked = sortedApplicantsByMmr().filter((player) => pickedIds.has(player.id));
+  board.innerHTML = `
+    <div class="draft-column captains">
+      <h3>팀장 후보 <span>${captains.length}</span></h3>
+      <div class="draft-list">${captains.map((player, index) => draftPlayerButton(player, index + 1, "captain")).join("") || "<p class=\"empty\">없음</p>"}</div>
+    </div>
+    <div class="draft-column">
+      <h3>남은 인원 <span>${remaining.length}</span></h3>
+      <div class="draft-list">${remaining.map((player, index) => draftPlayerButton(player, index + 1, "pick")).join("") || "<p class=\"empty\">남은 인원이 없습니다.</p>"}</div>
+    </div>
+    <div class="draft-column picked">
+      <h3>뽑힘 <span>${picked.length}</span></h3>
+      <div class="draft-list">${picked.map((player, index) => draftPlayerButton(player, index + 1, "unpick")).join("") || "<p class=\"empty\">아직 체크된 인원이 없습니다.</p>"}</div>
+    </div>`;
+}
+
+function draftPlayerButton(player, index, action) {
+  const name = player.discordName ? `${player.discordName} (${player.nickname})` : player.nickname;
+  const role = player.roles?.[0] || "-";
+  const disabled = action === "captain" ? " disabled" : "";
+  const token = action === "captain" ? "" : ` data-draft-${action}="${player.id}"`;
+  return `<button class="draft-player ${action}" type="button"${token}${disabled}>
+    <span>${index}</span>
+    <strong>${escapeHtml(name)}</strong>
+    <small>MMR ${formatNumber(player.mmr)} · ${escapeHtml(role)}</small>
+  </button>`;
 }
 
 function renderCaptains() {
@@ -755,13 +821,44 @@ function bindEvents() {
     normalizeScores();
     saveState();
   });
-  $("#desiredTeams").addEventListener("change", readTeamControls);
-  $("#teamSize").addEventListener("change", readTeamControls);
+  $("#desiredTeams").addEventListener("change", () => {
+    readTeamControls();
+    state.draft.picked = [];
+    saveState();
+  });
+  $("#teamSize").addEventListener("change", () => {
+    readTeamControls();
+    saveState();
+  });
+  $("#draftCaptainMode").addEventListener("change", (event) => {
+    state.draft.captainMode = event.target.value;
+    state.draft.picked = [];
+    saveState();
+  });
+  $("#resetDraft").addEventListener("click", () => {
+    state.draft.picked = [];
+    saveState();
+    toast("팀원 뽑기 체크를 초기화했습니다.");
+  });
+  $("#draftBoard").addEventListener("click", (event) => {
+    const pick = event.target.closest("[data-draft-pick]");
+    const unpick = event.target.closest("[data-draft-unpick]");
+    if (pick) {
+      const id = pick.dataset.draftPick;
+      if (!state.draft.picked.includes(id)) state.draft.picked.push(id);
+      saveState();
+    } else if (unpick) {
+      const id = unpick.dataset.draftUnpick;
+      state.draft.picked = state.draft.picked.filter((item) => item !== id);
+      saveState();
+    }
+  });
   $("#clearApplicants").addEventListener("click", () => {
     if (!confirm("참가자와 편성 팀을 모두 삭제할까요?")) return;
     state.applicants = [];
     state.teams = [];
     state.captains = {};
+    state.draft.picked = [];
     normalizeScores();
     saveState();
   });
@@ -771,6 +868,7 @@ function bindEvents() {
     const id = button.dataset.remove;
     state.applicants = state.applicants.filter((player) => player.id !== id);
     state.teams.forEach((team) => team.members = team.members.filter((memberId) => memberId !== id));
+    state.draft.picked = state.draft.picked.filter((playerId) => playerId !== id);
     saveState();
   });
   $("#scoreBoard").addEventListener("change", updateScore);
