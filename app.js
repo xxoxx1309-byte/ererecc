@@ -222,7 +222,7 @@ async function refreshApiMetadata(showMessage = false) {
       erFetch("v2/data/Character")
     ]);
     seasons = (seasonJson.data || []).filter((season) => !/pre/i.test(season.seasonName));
-    characterNames = new Map((characterJson.data || []).map((character) => [Number(character.code), character.name]));
+    characterNames = new Map((characterJson.data || []).map((character) => [Number(character.code), characterDisplayName(character)]));
     const hasSelected = seasons.some((season) => Number(season.seasonID) === Number(state.settings.seasonId));
     if (!hasSelected) state.settings.seasonId = DEFAULT_SEASON_ID;
     populateSeasonSelect();
@@ -322,7 +322,7 @@ async function lookupRank() {
       .sort((a, b) => Number(b.usages || b.totalGames || 0) - Number(a.usages || a.totalGames || 0))
       .slice(0, 3)
       .map((item) => ({
-        name: characterNames.get(Number(item.characterCode)) || `실험체 #${item.characterCode}`,
+        name: characterNames.get(Number(item.characterCode)) || `Character #${item.characterCode}`,
         totalGames: Number(item.totalGames || item.usages || 0),
         wins: Number(item.wins || 0)
       }));
@@ -940,6 +940,10 @@ function formatWinRate(totalWins, totalGames) {
   const wins = Number(totalWins);
   if (!Number.isFinite(games) || games <= 0 || !Number.isFinite(wins)) return "-";
   return `${((wins / games) * 100).toFixed(1)}%`;
+}
+
+function characterDisplayName(character) {
+  return character.resource || character.name || `Character #${character.code}`;
 }
 
 function renderMostStats(data) {
