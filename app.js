@@ -17,6 +17,7 @@ let rankCache = null;
 let seasons = [];
 let characterNames = new Map();
 let toastTimer = null;
+let currentView = location.hash === "#admin" ? "admin" : "apply";
 
 const $ = (selector) => document.querySelector(selector);
 
@@ -201,7 +202,11 @@ async function erFetch(path) {
 async function refreshApiMetadata(showMessage = false) {
   setApiStatus("loading", "API 확인 중");
   try {
-    if (!state.settings.apiKey) throw new Error("API 키 미설정");
+    if (!state.settings.apiKey) {
+      setApiStatus("manual", "수동 신청 가능");
+      if (showMessage) toast("API 키 없이도 참가자 등록은 가능합니다.");
+      return false;
+    }
     const [seasonJson, characterJson] = await Promise.all([
       erFetch("v2/data/Season"),
       erFetch("v2/data/Character")
@@ -215,7 +220,7 @@ async function refreshApiMetadata(showMessage = false) {
     if (showMessage) toast("Open API 연결을 확인했습니다.");
     return true;
   } catch (error) {
-    setApiStatus("error", error.message === "API 키 미설정" ? "API 키 필요" : "API 연결 실패");
+    setApiStatus("error", "API 연결 실패");
     if (showMessage) toast(error.message);
     return false;
   }
@@ -283,8 +288,9 @@ async function lookupRank() {
   const nickname = $("#nickname").value.trim();
   if (!nickname) return toast("닉네임을 입력해 주세요.");
   if (!state.settings.apiKey) {
-    $("#settingsDialog").showModal();
-    return toast("먼저 Open API 키를 입력해 주세요.");
+    rankCache = null;
+    updateRankPreview({ message: "API 키가 없어 랭크 조회를 건너뜁니다. 닉네임과 역할군만으로 바로 신청할 수 있습니다." }, "manual");
+    return toast("API 키 없이 수동 신청으로 진행할 수 있습니다.");
   }
 
   updateRankPreview(null, "loading");
@@ -342,6 +348,9 @@ function updateRankPreview(data, stateName = "success") {
   } else if (stateName === "error") {
     wrap.className = "rank-empty";
     wrap.innerHTML = `<i data-lucide="circle-alert"></i><strong>조회하지 못했습니다</strong><p>${escapeHtml(data.message)}</p>`;
+  } else if (stateName === "manual") {
+    wrap.className = "rank-empty";
+    wrap.innerHTML = `<i data-lucide="clipboard-pen-line"></i><strong>수동 신청 가능</strong><p>${escapeHtml(data.message)}</p>`;
   } else {
     const winRate = formatWinRate(data.totalWins, data.totalGames);
     const winRecord = data.totalGames
@@ -406,7 +415,7 @@ function resetForm() {
   selectedRoles = [];
   rankCache = null;
   $("#rankPreview").className = "rank-empty";
-  $("#rankPreview").innerHTML = `<i data-lucide="scan-search"></i><strong>닉네임을 조회해 주세요</strong><p>현재 선택한 시즌의 ${teamModeLabel()} 랭크를 불러옵니다.</p>`;
+  $("#rankPreview").innerHTML = `<i data-lucide="scan-search"></i><strong>랭크 조회는 선택입니다</strong><p>API 키가 없어도 닉네임과 역할군만으로 신청할 수 있습니다.</p>`;
   renderRoles();
   refreshIcons();
 }
@@ -618,11 +627,23 @@ function renderApplicants() {
 }
 
 function renderOverview() {
-  $("#eventTitle").textContent = state.settings.eventName;
-  document.title = `${state.settings.eventName} · 내전 계산기`;
+  $("#eventTitle").textContent = "내전 계산기";
+  document.title = "내전 계산기";
   $("#matchCountStat").textContent = state.settings.matchCount;
   $("#savedAt").textContent = state.updatedAt ? new Date(state.updatedAt).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "저장 대기";
   updateSeasonLabel();
+}
+
+function setView(view, updateHash = true) {
+  currentView = view === "admin" ? "admin" : "apply";
+  document.body.dataset.view = currentView;
+  document.querySelectorAll("[data-view-target]").forEach((button) => {
+    button.classList.toggle("active", button.dataset.viewTarget === currentView);
+  });
+  document.querySelectorAll("[data-view-panel]").forEach((panel) => {
+    panel.hidden = panel.dataset.viewPanel !== currentView;
+  });
+  if (updateHash) history.replaceState(null, "", currentView === "admin" ? "#admin" : "#apply");
 }
 
 function renderNotice() {
@@ -701,6 +722,9 @@ async function importJson(event) {
 }
 
 function bindEvents() {
+  document.querySelectorAll("[data-view-target]").forEach((button) => {
+    button.addEventListener("click", () => setView(button.dataset.viewTarget));
+  });
   $("#openSettings").addEventListener("click", () => $("#settingsDialog").showModal());
   $("#editNotice").addEventListener("click", () => $("#settingsDialog").showModal());
   $("#testApi").addEventListener("click", async () => {
@@ -717,7 +741,7 @@ function bindEvents() {
   });
   $("#lookupRank").addEventListener("click", lookupRank);
   $("#nickname").addEventListener("keydown", (event) => {
-    if (event.key === "Enter") {
+    if (event.key === "Enter" && state.settings.apiKey) {
       event.preventDefault();
       lookupRank();
     }
@@ -858,6 +882,7 @@ async function bootstrap() {
   bindSettings();
   bindEvents();
   render();
+  setView(currentView, false);
   await refreshApiMetadata();
 }
 

@@ -16,13 +16,11 @@
         <strong>내전 계산기</strong>
       </span>
     </a>
-    <nav aria-label="주요 메뉴">
-      <a href="#applicants">참가 등록</a>
-      <a href="#teams">팀 편성</a>
-      <a href="#matches">경기 기록</a>
-      <a href="#roster">명단</a>
+    <nav class="view-tabs" aria-label="화면 전환">
+      <button class="nav-tab active" type="button" data-view-target="apply">신청</button>
+      <button class="nav-tab" type="button" data-view-target="admin">관리자</button>
     </nav>
-    <div class="top-actions">
+    <div class="top-actions admin-only">
       <button class="icon-button" id="exportJson" type="button" title="JSON 백업" aria-label="JSON 백업">
         <i data-lucide="download"></i>
       </button>
@@ -40,7 +38,7 @@
     <section class="overview" id="overview">
       <div>
         <p class="eyebrow">CUSTOM MATCH CONTROL</p>
-        <h1 id="eventTitle">이터널 리턴 내전</h1>
+        <h1 id="eventTitle">내전 계산기</h1>
         <p class="overview-meta">
           <span id="seasonLabel">시즌 불러오는 중</span>
           <span id="apiStatus" class="status-chip">API 확인 중</span>
@@ -54,13 +52,13 @@
       </div>
     </section>
 
-    <section class="panel notice-panel" id="notice">
+    <section class="panel notice-panel view-panel" id="notice" data-view-panel="apply">
       <div class="section-head">
         <div>
           <p class="section-number">NOTICE</p>
           <h2>내전 안내</h2>
         </div>
-        <button class="text-button" id="editNotice" type="button">
+        <button class="text-button admin-only" id="editNotice" type="button">
           <i data-lucide="pencil"></i> 안내 수정
         </button>
       </div>
@@ -68,7 +66,7 @@
       <div id="rulesDisplay" class="rules-display"></div>
     </section>
 
-    <section class="workspace-grid" id="applicants">
+    <section class="workspace-grid view-panel" id="applicants" data-view-panel="apply">
       <article class="panel registration-panel">
         <div class="section-head">
           <div>
@@ -131,12 +129,12 @@
         <div class="rank-empty" id="rankPreview">
           <i data-lucide="scan-search"></i>
           <strong>닉네임을 조회해 주세요</strong>
-          <p>현재 선택한 시즌의 스쿼드 랭크를 불러옵니다.</p>
+          <p>API 키가 없어도 닉네임과 역할군만으로 신청할 수 있습니다.</p>
         </div>
       </aside>
     </section>
 
-    <section class="panel" id="teams">
+    <section class="panel view-panel" id="teams" data-view-panel="admin" hidden>
       <div class="section-head">
         <div>
           <p class="section-number">02</p>
@@ -164,7 +162,7 @@
       <div id="teamsBoard" class="teams-board"></div>
     </section>
 
-    <section class="panel" id="matches">
+    <section class="panel view-panel" id="matches" data-view-panel="admin" hidden>
       <div class="section-head">
         <div>
           <p class="section-number">03</p>
@@ -191,7 +189,7 @@
       </details>
     </section>
 
-    <section class="panel" id="roster">
+    <section class="panel view-panel" id="roster" data-view-panel="admin" hidden>
       <div class="section-head">
         <div>
           <p class="section-number">04</p>
@@ -295,6 +293,7 @@
         </div>
         <input id="apiBase" type="hidden" value="https://open-api.bser.io">
         <p class="note">API 키는 GitHub 저장소에 업로드하지 않으며 현재 브라우저의 로컬 저장소에만 보관됩니다.</p>
+        <p class="note">API 키가 없으면 랭크 조회만 건너뛰고 참가자 등록은 그대로 사용할 수 있습니다.</p>
       </fieldset>
 
       <fieldset>

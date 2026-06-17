@@ -5,6 +5,8 @@
 ## 주요 기능
 
 - 공식 Open API를 사용한 닉네임, 시즌 랭크, 전체 및 모스트별 승률 조회
+- API 키 없이 닉네임과 역할군만으로 수동 참가 등록
+- 신청 탭과 관리자 탭 분리
 - 공식 시즌 목록 자동 조회 및 정규 시즌 선택
 - 역할군 1·2·3순위 신청
 - MMR 기반 스네이크 팀 편성
@@ -49,7 +51,7 @@ python -m http.server 5173 --bind 127.0.0.1
 
 ## 배포
 
-`index.html`, `style.css`, `app.js`를 GitHub Pages에 배포하면 됩니다. 공개 Pages에서는 설정 버튼을 눌러 API 키를 한 번 입력해야 합니다.
+`index.html`, `style.css`, `app.js`를 GitHub Pages에 배포하면 됩니다. 공개 Pages에서는 API 키 없이도 참가 등록을 사용할 수 있고, 랭크 조회가 필요할 때만 설정에서 API 키를 입력하면 됩니다.
 
 ## 디자인
 
