@@ -115,10 +115,33 @@
         if (error) throw error;
       },
 
-      async listEvents(ownerId) {
-        const { data, error } = await client.from("events").select(EVENT_COLUMNS).eq("owner_id", ownerId).order("updated_at", { ascending: false });
+      async listEvents() {
+        const { data, error } = await client.from("events").select(EVENT_COLUMNS).order("updated_at", { ascending: false });
         if (error) throw error;
         return data || [];
+      },
+
+      async operatorProfile(email) {
+        const { data, error } = await client.from("site_operators").select("id,email,is_owner,created_at").eq("email", email.trim().toLowerCase()).maybeSingle();
+        if (error) throw error;
+        return data || null;
+      },
+
+      async listOperators() {
+        const { data, error } = await client.from("site_operators").select("id,email,is_owner,created_at").order("is_owner", { ascending: false }).order("created_at", { ascending: true });
+        if (error) throw error;
+        return data || [];
+      },
+
+      async addOperator(email) {
+        const { data, error } = await client.from("site_operators").insert({ email: email.trim().toLowerCase(), is_owner: false }).select("id,email,is_owner,created_at").single();
+        if (error) throw error;
+        return data;
+      },
+
+      async removeOperator(operatorId) {
+        const { error } = await client.from("site_operators").delete().eq("id", operatorId);
+        if (error) throw error;
       },
 
       async createEvent({ ownerId, name, slug, state }) {

@@ -77,6 +77,7 @@
         <button class="primary" type="submit">
           <i data-lucide="mail"></i> 로그인 링크 받기
         </button>
+        <p>등록된 운영자는 API 키 없이 이메일 로그인만으로 내전을 만들고 관리할 수 있습니다.</p>
       </form>
 
       <div id="cloudWorkspace" class="cloud-workspace" hidden>
@@ -86,6 +87,32 @@
             <i data-lucide="log-out"></i> 로그아웃
           </button>
         </div>
+        <div id="cloudUnauthorized" class="cloud-empty" hidden>
+          <i data-lucide="shield-alert"></i>
+          <div>
+            <strong>등록되지 않은 운영자입니다</strong>
+            <p>사이트 소유자에게 현재 로그인한 이메일 등록을 요청해 주세요.</p>
+          </div>
+        </div>
+        <section id="operatorTools" class="operator-tools" hidden>
+          <div class="operator-tools-head">
+            <div>
+              <span>사이트 권한</span>
+              <strong>운영자 이메일 관리</strong>
+            </div>
+          </div>
+          <form id="operatorForm" class="operator-form">
+            <label>운영자로 등록할 이메일
+              <input id="operatorEmail" type="email" autocomplete="off" required placeholder="operator@example.com">
+            </label>
+            <button class="secondary" id="addOperator" type="submit">
+              <i data-lucide="user-plus"></i> 등록
+            </button>
+          </form>
+          <p id="operatorError" class="form-error" role="alert" hidden></p>
+          <div id="operatorList" class="operator-list"></div>
+        </section>
+        <div id="eventManagementTools" class="event-management-tools">
         <div class="event-switcher">
           <label>관리할 내전
             <select id="cloudEventSelect"></select>
@@ -139,6 +166,7 @@
               <i data-lucide="copy"></i> 복사
             </button>
           </div>
+        </div>
         </div>
       </div>
     </section>

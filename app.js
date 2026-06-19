@@ -143,7 +143,7 @@ let toastTimer = null;
 const initialEventSlug = new URLSearchParams(location.search).get("event")?.trim() || "";
 let currentView = location.hash === "#admin"
   ? "admin"
-  : location.hash === "#apply" || initialEventSlug
+  : initialEventSlug
     ? "apply"
     : "admin";
 let runtimeConfig = { ...(window.ER_CONFIG || {}) };
@@ -151,6 +151,8 @@ let cloud = null;
 let cloudSession = null;
 let cloudEvent = null;
 let cloudEvents = [];
+let cloudOperator = null;
+let cloudOperators = [];
 let cloudApplicantUnsubscribe = null;
 let cloudSaveTimer = null;
 let cloudLoading = false;
@@ -318,8 +320,12 @@ function cloudEventSlug() {
   return new URLSearchParams(location.search).get("event")?.trim() || "";
 }
 
-function isCloudOwner() {
-  return Boolean(cloudEvent && cloudSession?.user?.id === cloudEvent.owner_id);
+function isSiteOwner() {
+  return cloudOperator?.is_owner === true;
+}
+
+function canManageCloudEvent() {
+  return Boolean(cloudEvent && cloudEvents.some((event) => event.id === cloudEvent.id));
 }
 
 function cloudApplyUrl(event = cloudEvent) {
@@ -335,6 +341,14 @@ function setCloudStatus(text, type = "") {
   const status = $("#cloudStatus");
   status.textContent = text;
   status.className = `cloud-status ${type}`.trim();
+}
+
+function updateViewAvailability() {
+  const applyTab = document.querySelector('[data-view-target="apply"]');
+  const canApply = !cloud?.configured || Boolean(cloudEvent || cloudEventSlug());
+  applyTab.disabled = !canApply;
+  applyTab.title = canApply ? "" : "내전을 만든 뒤 참가 신청 화면을 열 수 있습니다.";
+  if (!canApply && currentView === "apply") setView("admin", false);
 }
 
 function resetCloudLandingState() {
@@ -353,6 +367,12 @@ function setCloudCreateError(message = "") {
   error.hidden = !message;
 }
 
+function setOperatorError(message = "") {
+  const error = $("#operatorError");
+  error.textContent = message;
+  error.hidden = !message;
+}
+
 function friendlyCloudError(error) {
   const message = String(error?.message || "");
   if (/row-level security|permission denied|jwt|session/i.test(message)) return "관리자 로그인이 만료되었습니다. 다시 로그인해 주세요.";
@@ -361,12 +381,23 @@ function friendlyCloudError(error) {
   return message || "내전을 생성하지 못했습니다. 잠시 후 다시 시도해 주세요.";
 }
 
+function renderOperatorList() {
+  $("#operatorList").innerHTML = cloudOperators.map((operator) => `
+    <div class="operator-row">
+      <span>${escapeHtml(operator.email)}${operator.is_owner ? `<small>소유자</small>` : ""}</span>
+      ${operator.is_owner ? "" : `<button class="danger" type="button" data-remove-operator="${operator.id}"><i data-lucide="user-minus"></i> 해제</button>`}
+    </div>
+  `).join("");
+}
+
 function renderCloudControls() {
   const configured = Boolean(cloud?.configured);
+  document.body.classList.toggle("cloud-readonly-admin", configured && !cloudOperator);
   $("#localApiSettings").hidden = configured;
   $("#cloudUnavailable").hidden = configured;
   $("#adminLoginForm").hidden = !configured || Boolean(cloudSession);
   $("#cloudWorkspace").hidden = !configured || !cloudSession;
+  updateViewAvailability();
   if (!configured) {
     setCloudStatus("브라우저 저장 모드", "manual");
     updateApplicationAvailability();
@@ -378,9 +409,20 @@ function renderCloudControls() {
     return refreshIcons();
   }
 
+  $("#adminAccount").textContent = cloudSession.user.email || "관리자";
+  const authorized = Boolean(cloudOperator);
+  $("#cloudUnauthorized").hidden = authorized;
+  $("#eventManagementTools").hidden = !authorized;
+  $("#operatorTools").hidden = !isSiteOwner();
+  if (!authorized) {
+    setCloudStatus("운영자 승인 필요", "error");
+    updateApplicationAvailability();
+    return refreshIcons();
+  }
+
   const hasEvents = cloudEvents.length > 0;
   setCloudStatus(cloudEvent ? "실시간 연결됨" : hasEvents ? "내전을 선택하세요" : "첫 내전을 만들어 주세요", cloudEvent ? "ok" : "manual");
-  $("#adminAccount").textContent = cloudSession.user.email || "관리자";
+  if (isSiteOwner()) renderOperatorList();
   const select = $("#cloudEventSelect");
   select.innerHTML = hasEvents
     ? cloudEvents.map((event) => `<option value="${event.id}" ${event.id === cloudEvent?.id ? "selected" : ""}>${escapeHtml(event.name)} · ${escapeHtml(event.slug)}</option>`).join("")
@@ -391,9 +433,9 @@ function renderCloudControls() {
   $("#cloudNoEvents").hidden = hasEvents;
   $("#createEventForm").hidden = hasEvents && !cloudCreateOpen;
   $("#cancelCreateEvent").hidden = !hasEvents;
-  $("#deleteCloudEvent").disabled = !cloudEvent || !isCloudOwner();
-  $("#currentCloudEvent").hidden = !cloudEvent || !isCloudOwner();
-  if (cloudEvent && isCloudOwner()) {
+  $("#deleteCloudEvent").disabled = !canManageCloudEvent();
+  $("#currentCloudEvent").hidden = !canManageCloudEvent();
+  if (canManageCloudEvent()) {
     $("#registrationOpen").checked = cloudEvent.registration_open !== false;
     const applyUrl = cloudApplyUrl();
     $("#currentCloudEventName").textContent = cloudEvent.name;
@@ -414,8 +456,8 @@ function updateApplicationAvailability() {
   }
   status.hidden = false;
   if (!cloudEvent) {
-    status.className = "cloud-apply-status closed";
-    status.textContent = "참가 신청은 관리자가 생성한 내전별 링크에서 열립니다.";
+    status.hidden = true;
+    status.textContent = "";
     submit.disabled = true;
     return;
   }
@@ -440,7 +482,7 @@ function applyCloudState(event, applicants = []) {
 }
 
 async function reloadCloudApplicants() {
-  if (!cloudEvent || !isCloudOwner()) return;
+  if (!canManageCloudEvent()) return;
   state.applicants = await cloud.applicants(cloudEvent.id);
   render();
 }
@@ -448,7 +490,7 @@ async function reloadCloudApplicants() {
 function subscribeCloudApplicants() {
   if (cloudApplicantUnsubscribe) cloudApplicantUnsubscribe();
   cloudApplicantUnsubscribe = null;
-  if (!cloudEvent || !isCloudOwner()) return;
+  if (!canManageCloudEvent()) return;
   cloudApplicantUnsubscribe = cloud.subscribeApplicants(cloudEvent.id, () => {
     clearTimeout(subscribeCloudApplicants.timer);
     subscribeCloudApplicants.timer = setTimeout(() => reloadCloudApplicants().catch((error) => toast(error.message)), 180);
@@ -478,17 +520,22 @@ async function loadPublicCloudEvent(slug) {
   const event = await cloud.eventBySlug(slug);
   if (!event) {
     cloudEvent = null;
+    const url = new URL(location.href);
+    url.searchParams.delete("event");
+    url.hash = "admin";
+    history.replaceState(null, "", url);
+    setView("admin", false);
     renderCloudControls();
     return toast("해당 신청 내전을 찾지 못했습니다.");
   }
-  const applicants = cloudSession?.user?.id === event.owner_id ? await cloud.applicants(event.id) : [];
+  const applicants = cloudEvents.some((item) => item.id === event.id) ? await cloud.applicants(event.id) : [];
   applyCloudState(event, applicants);
-  if (isCloudOwner()) subscribeCloudApplicants();
+  if (canManageCloudEvent()) subscribeCloudApplicants();
 }
 
 async function refreshCloudEvents(preferredId = "") {
-  if (!cloudSession) return;
-  cloudEvents = await cloud.listEvents(cloudSession.user.id);
+  if (!cloudSession || !cloudOperator) return;
+  cloudEvents = await cloud.listEvents();
   const validIds = new Set(cloudEvents.map((event) => event.id));
   const selected = validIds.has(preferredId)
     ? preferredId
@@ -508,12 +555,17 @@ async function handleCloudSession(session) {
   cloudSession = session;
   if (!session) {
     cloudEvents = [];
+    cloudOperator = null;
+    cloudOperators = [];
     if (cloudApplicantUnsubscribe) cloudApplicantUnsubscribe();
     cloudApplicantUnsubscribe = null;
     renderCloudControls();
     return;
   }
-  await refreshCloudEvents();
+  cloudOperator = await cloud.operatorProfile(session.user.email || "");
+  cloudOperators = isSiteOwner() ? await cloud.listOperators() : [];
+  if (cloudOperator) await refreshCloudEvents();
+  else cloudEvents = [];
   const slug = cloudEventSlug();
   if (slug && cloudEvent?.slug !== slug) await loadPublicCloudEvent(slug);
   renderCloudControls();
@@ -531,12 +583,12 @@ async function initializeCloud() {
   });
   const slug = cloudEventSlug();
   if (slug) await loadPublicCloudEvent(slug);
-  if (cloudSession) await refreshCloudEvents(cloudEvent?.id);
+  if (cloudSession) await handleCloudSession(cloudSession);
   renderCloudControls();
 }
 
 function scheduleCloudSave() {
-  if (cloudLoading || !cloud?.configured || !cloudEvent || !isCloudOwner()) return;
+  if (cloudLoading || !cloud?.configured || !canManageCloudEvent()) return;
   clearTimeout(cloudSaveTimer);
   cloudSaveTimer = setTimeout(async () => {
     try {
@@ -1337,7 +1389,13 @@ async function importJson(event) {
 
 function bindEvents() {
   document.querySelectorAll("[data-view-target]").forEach((button) => {
-    button.addEventListener("click", () => setView(button.dataset.viewTarget));
+    button.addEventListener("click", () => {
+      if (button.dataset.viewTarget === "apply" && cloud?.configured && !cloudEvent) {
+        setView("admin");
+        return toast("먼저 내전을 만들거나 관리할 내전을 선택해 주세요.");
+      }
+      setView(button.dataset.viewTarget);
+    });
   });
   $("#adminLoginForm").addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -1352,12 +1410,50 @@ function bindEvents() {
     try {
       await cloud.signOut();
       cloudEvent = null;
+      cloudOperator = null;
+      cloudOperators = [];
       state = defaultState();
       bindSettings();
       render();
       renderCloudControls();
     } catch (error) {
       toast(error.message);
+    }
+  });
+  $("#operatorForm").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (!isSiteOwner()) return;
+    const email = $("#operatorEmail").value.trim().toLowerCase();
+    const button = $("#addOperator");
+    setOperatorError();
+    button.disabled = true;
+    try {
+      await cloud.addOperator(email);
+      cloudOperators = await cloud.listOperators();
+      $("#operatorForm").reset();
+      renderCloudControls();
+      toast("운영자를 등록했습니다.");
+    } catch (error) {
+      const duplicate = error.code === "23505" || /duplicate|unique/i.test(error.message);
+      const message = duplicate ? "이미 등록된 운영자 이메일입니다." : friendlyCloudError(error);
+      setOperatorError(message);
+      toast(message);
+    } finally {
+      button.disabled = false;
+    }
+  });
+  $("#operatorList").addEventListener("click", async (event) => {
+    const button = event.target.closest("[data-remove-operator]");
+    if (!button || !isSiteOwner()) return;
+    const operator = cloudOperators.find((item) => item.id === button.dataset.removeOperator);
+    if (!operator || !confirm(`${operator.email} 운영자 권한을 해제할까요?`)) return;
+    try {
+      await cloud.removeOperator(operator.id);
+      cloudOperators = await cloud.listOperators();
+      renderCloudControls();
+      toast("운영자 권한을 해제했습니다.");
+    } catch (error) {
+      toast(friendlyCloudError(error));
     }
   });
   $("#newCloudEvent").addEventListener("click", () => {
@@ -1374,6 +1470,7 @@ function bindEvents() {
   });
   $("#createEventForm").addEventListener("submit", async (event) => {
     event.preventDefault();
+    if (!cloudOperator) return toast("등록된 운영자만 내전을 만들 수 있습니다.");
     const name = $("#newEventName").value.trim();
     const enteredSlug = $("#newEventSlug").value.trim().toLowerCase();
     const slug = /^[a-z0-9][a-z0-9-]{2,39}$/.test(enteredSlug)
@@ -1406,7 +1503,7 @@ function bindEvents() {
     loadAdminCloudEvent(event.target.value).catch((error) => toast(error.message));
   });
   $("#deleteCloudEvent").addEventListener("click", async () => {
-    if (!cloudEvent || !confirm(`'${cloudEvent.name}' 내전과 신청 명단을 모두 삭제할까요?`)) return;
+    if (!canManageCloudEvent() || !confirm(`'${cloudEvent.name}' 내전과 신청 명단을 모두 삭제할까요?`)) return;
     try {
       await cloud.deleteEvent(cloudEvent.id);
       cloudEvent = null;
@@ -1420,7 +1517,7 @@ function bindEvents() {
     }
   });
   $("#registrationOpen").addEventListener("change", async (event) => {
-    if (!cloudEvent) return;
+    if (!canManageCloudEvent()) return;
     try {
       cloudEvent = await cloud.updateEvent(cloudEvent.id, state, { registration_open: event.target.checked });
       renderCloudControls();
@@ -1518,7 +1615,7 @@ function bindEvents() {
   });
   $("#clearApplicants").addEventListener("click", async () => {
     if (!confirm("참가자와 편성 팀을 모두 삭제할까요?")) return;
-    if (cloud?.configured && !isCloudOwner()) return toast("관리자 로그인 후 삭제할 수 있습니다.");
+    if (cloud?.configured && !canManageCloudEvent()) return toast("이 내전의 운영자만 삭제할 수 있습니다.");
     try {
       if (cloud?.configured && cloudEvent) await cloud.clearApplicants(cloudEvent.id);
     } catch (error) {
@@ -1535,7 +1632,7 @@ function bindEvents() {
     const button = event.target.closest("[data-remove]");
     if (!button) return;
     const id = button.dataset.remove;
-    if (cloud?.configured && !isCloudOwner()) return toast("관리자 로그인 후 삭제할 수 있습니다.");
+    if (cloud?.configured && !canManageCloudEvent()) return toast("이 내전의 운영자만 삭제할 수 있습니다.");
     try {
       if (cloud?.configured && cloudEvent) await cloud.deleteApplicant(id);
     } catch (error) {
