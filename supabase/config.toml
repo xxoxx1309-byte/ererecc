@@ -1,0 +1,4 @@
+project_id = "er-custom-match-calculator"
+
+[functions.rank-lookup]
+verify_jwt = false

@@ -141,6 +141,14 @@ let seasons = [];
 let characterNames = koreanCharacterNameMap();
 let toastTimer = null;
 let currentView = location.hash === "#admin" ? "admin" : "apply";
+let runtimeConfig = { ...(window.ER_CONFIG || {}) };
+let cloud = null;
+let cloudSession = null;
+let cloudEvent = null;
+let cloudEvents = [];
+let cloudApplicantUnsubscribe = null;
+let cloudSaveTimer = null;
+let cloudLoading = false;
 
 const $ = (selector) => document.querySelector(selector);
 
@@ -240,6 +248,7 @@ function syncMatchArrays(target = state) {
 function saveState(renderAfter = true) {
   state.updatedAt = new Date().toISOString();
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  scheduleCloudSave();
   if (renderAfter) render();
 }
 
@@ -248,10 +257,205 @@ async function loadLocalConfig() {
     const response = await fetch("./config.local.json", { cache: "no-store" });
     if (!response.ok) return;
     const config = await response.json();
+    runtimeConfig = { ...runtimeConfig, ...config };
     if (!state.settings.apiKey && config.apiKey) state.settings.apiKey = config.apiKey;
   } catch {
     // Optional local-only configuration.
   }
+}
+
+function cloudEventSlug() {
+  return new URLSearchParams(location.search).get("event")?.trim() || "";
+}
+
+function isCloudOwner() {
+  return Boolean(cloudEvent && cloudSession?.user?.id === cloudEvent.owner_id);
+}
+
+function cloudApplyUrl(event = cloudEvent) {
+  if (!event) return "";
+  const url = new URL(location.href);
+  url.search = "";
+  url.hash = "apply";
+  url.searchParams.set("event", event.slug);
+  return url.toString();
+}
+
+function setCloudStatus(text, type = "") {
+  const status = $("#cloudStatus");
+  status.textContent = text;
+  status.className = `cloud-status ${type}`.trim();
+}
+
+function renderCloudControls() {
+  const configured = Boolean(cloud?.configured);
+  $("#cloudUnavailable").hidden = configured;
+  $("#adminLoginForm").hidden = !configured || Boolean(cloudSession);
+  $("#cloudWorkspace").hidden = !configured || !cloudSession;
+  if (!configured) {
+    setCloudStatus("브라우저 저장 모드", "manual");
+    updateApplicationAvailability();
+    return refreshIcons();
+  }
+  if (!cloudSession) {
+    setCloudStatus("관리자 로그인 필요", "manual");
+    updateApplicationAvailability();
+    return refreshIcons();
+  }
+
+  setCloudStatus(cloudEvent ? "실시간 연결됨" : "내전을 선택하세요", cloudEvent ? "ok" : "manual");
+  $("#adminAccount").textContent = cloudSession.user.email || "관리자";
+  const select = $("#cloudEventSelect");
+  select.innerHTML = cloudEvents.length
+    ? cloudEvents.map((event) => `<option value="${event.id}" ${event.id === cloudEvent?.id ? "selected" : ""}>${escapeHtml(event.name)} · ${escapeHtml(event.slug)}</option>`).join("")
+    : `<option value="">생성된 내전이 없습니다</option>`;
+  select.disabled = !cloudEvents.length;
+  $("#deleteCloudEvent").disabled = !cloudEvent || !isCloudOwner();
+  $("#currentCloudEvent").hidden = !cloudEvent || !isCloudOwner();
+  if (cloudEvent && isCloudOwner()) {
+    $("#registrationOpen").checked = cloudEvent.registration_open !== false;
+    $("#cloudApplyLink").value = cloudApplyUrl();
+  }
+  updateApplicationAvailability();
+  refreshIcons();
+}
+
+function updateApplicationAvailability() {
+  const status = $("#cloudApplyStatus");
+  const submit = $("#submitApplicant");
+  if (!cloud?.configured) {
+    status.hidden = true;
+    submit.disabled = false;
+    return;
+  }
+  status.hidden = false;
+  if (!cloudEvent) {
+    status.className = "cloud-apply-status error";
+    status.textContent = "온라인 신청 링크가 올바르지 않습니다. 관리자에게 받은 내전별 링크로 접속해 주세요.";
+    submit.disabled = true;
+    return;
+  }
+  const open = cloudEvent.registration_open !== false;
+  status.className = `cloud-apply-status ${open ? "ok" : "closed"}`;
+  status.textContent = open
+    ? `${cloudEvent.name} · 실시간 신청 접수 중`
+    : `${cloudEvent.name} · 신청이 마감되었습니다.`;
+  submit.disabled = !open;
+}
+
+function applyCloudState(event, applicants = []) {
+  const localApiKey = state.settings.apiKey || runtimeConfig.apiKey || "";
+  cloudLoading = true;
+  state = normalizeState(cloud.stateFromEvent(event, applicants));
+  state.settings.apiKey = localApiKey;
+  cloudEvent = event;
+  bindSettings();
+  render();
+  cloudLoading = false;
+  renderCloudControls();
+}
+
+async function reloadCloudApplicants() {
+  if (!cloudEvent || !isCloudOwner()) return;
+  state.applicants = await cloud.applicants(cloudEvent.id);
+  render();
+}
+
+function subscribeCloudApplicants() {
+  if (cloudApplicantUnsubscribe) cloudApplicantUnsubscribe();
+  cloudApplicantUnsubscribe = null;
+  if (!cloudEvent || !isCloudOwner()) return;
+  cloudApplicantUnsubscribe = cloud.subscribeApplicants(cloudEvent.id, () => {
+    clearTimeout(subscribeCloudApplicants.timer);
+    subscribeCloudApplicants.timer = setTimeout(() => reloadCloudApplicants().catch((error) => toast(error.message)), 180);
+  });
+}
+
+async function loadAdminCloudEvent(eventId) {
+  if (!eventId || !cloudSession) return;
+  cloudLoading = true;
+  try {
+    const event = await cloud.eventById(eventId);
+    const applicants = await cloud.applicants(event.id);
+    applyCloudState(event, applicants);
+    subscribeCloudApplicants();
+    const url = new URL(location.href);
+    url.searchParams.set("event", event.slug);
+    url.hash = "admin";
+    history.replaceState(null, "", url);
+    setView("admin", false);
+  } finally {
+    cloudLoading = false;
+  }
+}
+
+async function loadPublicCloudEvent(slug) {
+  if (!slug || !cloud?.configured) return;
+  const event = await cloud.eventBySlug(slug);
+  if (!event) {
+    cloudEvent = null;
+    renderCloudControls();
+    return toast("해당 신청 내전을 찾지 못했습니다.");
+  }
+  const applicants = cloudSession?.user?.id === event.owner_id ? await cloud.applicants(event.id) : [];
+  applyCloudState(event, applicants);
+  if (isCloudOwner()) subscribeCloudApplicants();
+}
+
+async function refreshCloudEvents(preferredId = "") {
+  if (!cloudSession) return;
+  cloudEvents = await cloud.listEvents(cloudSession.user.id);
+  const selected = preferredId || cloudEvent?.id || cloudEvents[0]?.id || "";
+  renderCloudControls();
+  if (selected) await loadAdminCloudEvent(selected);
+  if (!cloudEvents.length) $("#createEventForm").hidden = false;
+}
+
+async function handleCloudSession(session) {
+  cloudSession = session;
+  if (!session) {
+    cloudEvents = [];
+    if (cloudApplicantUnsubscribe) cloudApplicantUnsubscribe();
+    cloudApplicantUnsubscribe = null;
+    renderCloudControls();
+    return;
+  }
+  await refreshCloudEvents();
+  const slug = cloudEventSlug();
+  if (slug && cloudEvent?.slug !== slug) await loadPublicCloudEvent(slug);
+  renderCloudControls();
+}
+
+async function initializeCloud() {
+  cloud = window.ERCloud?.create(runtimeConfig) || { configured: false };
+  renderCloudControls();
+  if (!cloud.configured) return;
+  cloudSession = await cloud.session();
+  cloud.onAuthChange((session) => {
+    if ((session?.user?.id || "") === (cloudSession?.user?.id || "")) return;
+    handleCloudSession(session).catch((error) => toast(error.message));
+  });
+  const slug = cloudEventSlug();
+  if (slug) await loadPublicCloudEvent(slug);
+  if (cloudSession) await refreshCloudEvents(cloudEvent?.id);
+  renderCloudControls();
+}
+
+function scheduleCloudSave() {
+  if (cloudLoading || !cloud?.configured || !cloudEvent || !isCloudOwner()) return;
+  clearTimeout(cloudSaveTimer);
+  cloudSaveTimer = setTimeout(async () => {
+    try {
+      setCloudStatus("저장 중");
+      cloudEvent = await cloud.updateEvent(cloudEvent.id, state);
+      setCloudStatus("실시간 저장됨", "ok");
+      const index = cloudEvents.findIndex((event) => event.id === cloudEvent.id);
+      if (index >= 0) cloudEvents[index] = cloudEvent;
+    } catch (error) {
+      setCloudStatus("저장 실패", "error");
+      toast(error.message);
+    }
+  }, 500);
 }
 
 function bindSettings() {
@@ -344,6 +548,11 @@ async function refreshApiMetadata(showMessage = false) {
   setApiStatus("loading", "API 확인 중");
   try {
     if (!state.settings.apiKey) {
+      if (cloud?.configured) {
+        setApiStatus("ok", "온라인 조회 가능");
+        if (showMessage) toast("온라인 랭크 조회 기능을 사용합니다.");
+        return true;
+      }
       setApiStatus("manual", "수동 신청 가능");
       if (showMessage) toast("API 키 없이도 참가자 등록은 가능합니다.");
       return false;
@@ -434,7 +643,8 @@ function toggleRole(role) {
 async function lookupRank() {
   const nickname = $("#nickname").value.trim();
   if (!nickname) return toast("닉네임을 입력해 주세요.");
-  if (!state.settings.apiKey) {
+  const useCloudLookup = Boolean(cloud?.configured && cloudEvent);
+  if (!useCloudLookup && !state.settings.apiKey) {
     rankCache = null;
     updateRankPreview({ message: "API 키가 없어 랭크 조회를 건너뜁니다. 닉네임과 역할군만으로 바로 신청할 수 있습니다." }, "manual");
     return toast("API 키 없이 수동 신청으로 진행할 수 있습니다.");
@@ -442,17 +652,26 @@ async function lookupRank() {
 
   updateRankPreview(null, "loading");
   try {
-    const userJson = await erFetch(`v1/user/nickname?query=${encodeURIComponent(nickname)}`);
-    const user = userJson.user;
-    if (!user?.userId) throw new Error("닉네임에 해당하는 계정을 찾지 못했습니다.");
-
-    const userId = encodeURIComponent(user.userId);
     const seasonId = state.settings.seasonId;
     const teamMode = state.settings.teamMode;
-    const [rankJson, statsJson] = await Promise.all([
-      erFetch(`v1/rank/uid/${userId}/${seasonId}/${teamMode}`),
-      erFetch(`v2/user/stats/uid/${userId}/${seasonId}/3`)
-    ]);
+    let user;
+    let rankJson;
+    let statsJson;
+    if (useCloudLookup) {
+      const result = await cloud.rankLookup({ nickname, seasonId, teamMode });
+      user = result.user;
+      rankJson = { userRank: result.rank || {} };
+      statsJson = { userStats: [result.stats || {}] };
+    } else {
+      const userJson = await erFetch(`v1/user/nickname?query=${encodeURIComponent(nickname)}`);
+      user = userJson.user;
+      if (!user?.userId) throw new Error("닉네임에 해당하는 계정을 찾지 못했습니다.");
+      const userId = encodeURIComponent(user.userId);
+      [rankJson, statsJson] = await Promise.all([
+        erFetch(`v1/rank/uid/${userId}/${seasonId}/${teamMode}`),
+        erFetch(`v2/user/stats/uid/${userId}/${seasonId}/3`)
+      ]);
+    }
     const stats = (statsJson.userStats || []).find((item) => Number(item.matchingTeamMode) === teamMode) || statsJson.userStats?.[0] || {};
     const mostStats = (stats.characterStats || [])
       .slice()
@@ -531,7 +750,7 @@ function teamModeLabel() {
   return ({ 1: "솔로", 2: "듀오", 3: "스쿼드" })[state.settings.teamMode] || "스쿼드";
 }
 
-function submitApplicant(event) {
+async function submitApplicant(event) {
   event.preventDefault();
   const nickname = $("#nickname").value.trim();
   if (!nickname || selectedRoles.length !== 3) return toast("닉네임과 역할군 3개를 모두 입력해 주세요.");
@@ -550,6 +769,22 @@ function submitApplicant(event) {
     memo: $("#memo").value.trim(),
     createdAt: new Date().toISOString()
   };
+  if (cloud?.configured) {
+    if (!cloudEvent) return toast("올바른 내전 신청 링크로 접속해 주세요.");
+    if (cloudEvent.registration_open === false) return toast("참가 신청이 마감되었습니다.");
+    try {
+      $("#submitApplicant").disabled = true;
+      await cloud.submitApplicant(cloudEvent.id, applicant);
+      resetForm();
+      updateApplicationAvailability();
+      toast("참가 신청이 실시간으로 등록되었습니다.");
+    } catch (error) {
+      const duplicate = error.code === "23505" || /duplicate|unique/i.test(error.message);
+      toast(duplicate ? "이미 신청된 인게임 닉네임입니다." : error.message);
+      updateApplicationAvailability();
+    }
+    return;
+  }
   const index = state.applicants.findIndex((item) => item.nickname.toLowerCase() === nickname.toLowerCase());
   if (index >= 0) state.applicants[index] = { ...state.applicants[index], ...applicant, id: state.applicants[index].id };
   else state.applicants.push(applicant);
@@ -1011,6 +1246,92 @@ function bindEvents() {
   document.querySelectorAll("[data-view-target]").forEach((button) => {
     button.addEventListener("click", () => setView(button.dataset.viewTarget));
   });
+  $("#adminLoginForm").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    try {
+      await cloud.sendMagicLink($("#adminEmail").value.trim());
+      toast("이메일로 로그인 링크를 보냈습니다.");
+    } catch (error) {
+      toast(error.message);
+    }
+  });
+  $("#adminSignOut").addEventListener("click", async () => {
+    try {
+      await cloud.signOut();
+      cloudEvent = null;
+      state = defaultState();
+      bindSettings();
+      render();
+      renderCloudControls();
+    } catch (error) {
+      toast(error.message);
+    }
+  });
+  $("#newCloudEvent").addEventListener("click", () => {
+    $("#createEventForm").hidden = false;
+    $("#newEventName").focus();
+  });
+  $("#cancelCreateEvent").addEventListener("click", () => {
+    $("#createEventForm").reset();
+    $("#createEventForm").hidden = true;
+  });
+  $("#createEventForm").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const name = $("#newEventName").value.trim();
+    const slug = $("#newEventSlug").value.trim().toLowerCase();
+    if (!/^[a-z0-9][a-z0-9-]{2,39}$/.test(slug)) return toast("신청 주소 코드는 영문 소문자, 숫자, 하이픈으로 입력해 주세요.");
+    try {
+      const seed = defaultState();
+      seed.settings.eventName = name;
+      const created = await cloud.createEvent({ ownerId: cloudSession.user.id, name, slug, state: seed });
+      $("#createEventForm").reset();
+      $("#createEventForm").hidden = true;
+      await refreshCloudEvents(created.id);
+      toast("새 내전을 만들었습니다.");
+    } catch (error) {
+      const duplicate = error.code === "23505" || /duplicate|unique/i.test(error.message);
+      toast(duplicate ? "이미 사용 중인 신청 주소 코드입니다." : error.message);
+    }
+  });
+  $("#cloudEventSelect").addEventListener("change", (event) => {
+    loadAdminCloudEvent(event.target.value).catch((error) => toast(error.message));
+  });
+  $("#deleteCloudEvent").addEventListener("click", async () => {
+    if (!cloudEvent || !confirm(`'${cloudEvent.name}' 내전과 신청 명단을 모두 삭제할까요?`)) return;
+    try {
+      await cloud.deleteEvent(cloudEvent.id);
+      cloudEvent = null;
+      state = defaultState();
+      bindSettings();
+      render();
+      await refreshCloudEvents();
+      toast("내전을 삭제했습니다.");
+    } catch (error) {
+      toast(error.message);
+    }
+  });
+  $("#registrationOpen").addEventListener("change", async (event) => {
+    if (!cloudEvent) return;
+    try {
+      cloudEvent = await cloud.updateEvent(cloudEvent.id, state, { registration_open: event.target.checked });
+      renderCloudControls();
+      toast(event.target.checked ? "참가 신청을 열었습니다." : "참가 신청을 마감했습니다.");
+    } catch (error) {
+      event.target.checked = !event.target.checked;
+      toast(error.message);
+    }
+  });
+  $("#copyApplyLink").addEventListener("click", async () => {
+    const link = $("#cloudApplyLink").value;
+    try {
+      await navigator.clipboard.writeText(link);
+      toast("신청 링크를 복사했습니다.");
+    } catch {
+      $("#cloudApplyLink").select();
+      document.execCommand("copy");
+      toast("신청 링크를 복사했습니다.");
+    }
+  });
   $("#openSettings").addEventListener("click", () => $("#settingsDialog").showModal());
   $("#editNotice").addEventListener("click", () => $("#settingsDialog").showModal());
   $("#testApi").addEventListener("click", async () => {
@@ -1027,7 +1348,7 @@ function bindEvents() {
   });
   $("#lookupRank").addEventListener("click", lookupRank);
   $("#nickname").addEventListener("keydown", (event) => {
-    if (event.key === "Enter" && state.settings.apiKey) {
+    if (event.key === "Enter" && (state.settings.apiKey || (cloud?.configured && cloudEvent))) {
       event.preventDefault();
       lookupRank();
     }
@@ -1086,8 +1407,14 @@ function bindEvents() {
     saveState();
     toast("무기군을 A부터 순서대로 균등 배정했습니다.");
   });
-  $("#clearApplicants").addEventListener("click", () => {
+  $("#clearApplicants").addEventListener("click", async () => {
     if (!confirm("참가자와 편성 팀을 모두 삭제할까요?")) return;
+    if (cloud?.configured && !isCloudOwner()) return toast("관리자 로그인 후 삭제할 수 있습니다.");
+    try {
+      if (cloud?.configured && cloudEvent) await cloud.clearApplicants(cloudEvent.id);
+    } catch (error) {
+      return toast(error.message);
+    }
     state.applicants = [];
     state.teams = [];
     state.captains = {};
@@ -1095,10 +1422,16 @@ function bindEvents() {
     normalizeScores();
     saveState();
   });
-  $("#applicantRows").addEventListener("click", (event) => {
+  $("#applicantRows").addEventListener("click", async (event) => {
     const button = event.target.closest("[data-remove]");
     if (!button) return;
     const id = button.dataset.remove;
+    if (cloud?.configured && !isCloudOwner()) return toast("관리자 로그인 후 삭제할 수 있습니다.");
+    try {
+      if (cloud?.configured && cloudEvent) await cloud.deleteApplicant(id);
+    } catch (error) {
+      return toast(error.message);
+    }
     state.applicants = state.applicants.filter((player) => player.id !== id);
     state.teams.forEach((team) => team.members = team.members.filter((memberId) => memberId !== id));
     state.draft.picked = state.draft.picked.filter((playerId) => playerId !== id);
@@ -1250,6 +1583,7 @@ async function bootstrap() {
   bindEvents();
   render();
   setView(currentView, false);
+  await initializeCloud();
   await refreshApiMetadata();
 }
 
