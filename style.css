@@ -303,6 +303,14 @@ label {
   font-weight: 750;
 }
 
+.optional-label {
+  margin-left: 4px;
+  color: var(--subtle);
+  font-family: var(--body);
+  font-size: 10px;
+  font-weight: 600;
+}
+
 input, select, textarea {
   width: 100%;
   padding: 9px 11px;

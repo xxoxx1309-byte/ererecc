@@ -1278,8 +1278,10 @@ function bindEvents() {
   $("#createEventForm").addEventListener("submit", async (event) => {
     event.preventDefault();
     const name = $("#newEventName").value.trim();
-    const slug = $("#newEventSlug").value.trim().toLowerCase();
-    if (!/^[a-z0-9][a-z0-9-]{2,39}$/.test(slug)) return toast("신청 주소 코드는 영문 소문자, 숫자, 하이픈으로 입력해 주세요.");
+    const enteredSlug = $("#newEventSlug").value.trim().toLowerCase();
+    const slug = /^[a-z0-9][a-z0-9-]{2,39}$/.test(enteredSlug)
+      ? enteredSlug
+      : `match-${new Date().toISOString().slice(0, 10).replaceAll("-", "")}-${crypto.randomUUID().slice(0, 6)}`;
     try {
       const seed = defaultState();
       seed.settings.eventName = name;

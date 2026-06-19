@@ -100,8 +100,8 @@
           <label>내전 이름
             <input id="newEventName" maxlength="60" required placeholder="예: 6월 무기군 내전">
           </label>
-          <label>신청 주소 코드
-            <input id="newEventSlug" maxlength="40" required pattern="[a-z0-9][a-z0-9-]{2,39}" placeholder="예: weapon-june">
+          <label>신청 주소 코드 <span class="optional-label">선택</span>
+            <input id="newEventSlug" maxlength="40" autocomplete="off" placeholder="비워 두면 자동 생성">
           </label>
           <button class="primary" type="submit">
             <i data-lucide="check"></i> 생성
