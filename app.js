@@ -140,7 +140,12 @@ let rankCache = null;
 let seasons = [];
 let characterNames = koreanCharacterNameMap();
 let toastTimer = null;
-let currentView = location.hash === "#admin" ? "admin" : "apply";
+const initialEventSlug = new URLSearchParams(location.search).get("event")?.trim() || "";
+let currentView = location.hash === "#admin"
+  ? "admin"
+  : location.hash === "#apply" || initialEventSlug
+    ? "apply"
+    : "admin";
 let runtimeConfig = { ...(window.ER_CONFIG || {}) };
 let cloud = null;
 let cloudSession = null;
@@ -149,6 +154,7 @@ let cloudEvents = [];
 let cloudApplicantUnsubscribe = null;
 let cloudSaveTimer = null;
 let cloudLoading = false;
+let cloudCreateOpen = false;
 
 const $ = (selector) => document.querySelector(selector);
 
@@ -232,8 +238,52 @@ function normalizeState(saved, isLegacy = false) {
   normalized.weaponAssignments = saved.weaponAssignments || {};
   normalized.replayCodes = Array.isArray(saved.replayCodes) ? saved.replayCodes : [];
   normalized.scores = Array.isArray(saved.scores) ? saved.scores : [];
+  sanitizeStateRelations(normalized);
   syncMatchArrays(normalized);
   return normalized;
+}
+
+function sanitizeStateRelations(target) {
+  const seenApplicantIds = new Set();
+  const seenNicknames = new Set();
+  target.applicants = target.applicants.filter((applicant) => {
+    const id = String(applicant?.id || "").trim();
+    const nickname = String(applicant?.nickname || "").trim().toLowerCase();
+    if (!id || !nickname || seenApplicantIds.has(id) || seenNicknames.has(nickname)) return false;
+    seenApplicantIds.add(id);
+    seenNicknames.add(nickname);
+    applicant.id = id;
+    applicant.nickname = String(applicant.nickname).trim();
+    applicant.roles = [...new Set(Array.isArray(applicant.roles) ? applicant.roles.filter((role) => ROLES.includes(role)) : [])].slice(0, 3);
+    return true;
+  });
+
+  const validApplicantIds = new Set(target.applicants.map((applicant) => applicant.id));
+  const seenTeamIds = new Set();
+  const assignedApplicantIds = new Set();
+  target.teams = target.teams.filter((team) => {
+    const id = String(team?.id || "").trim();
+    if (!id || seenTeamIds.has(id)) return false;
+    seenTeamIds.add(id);
+    team.id = id;
+    team.members = [...new Set((Array.isArray(team.members) ? team.members : []).map(String))].filter((memberId) => {
+      if (!validApplicantIds.has(memberId) || assignedApplicantIds.has(memberId)) return false;
+      assignedApplicantIds.add(memberId);
+      return true;
+    });
+    return true;
+  });
+
+  const validTeamIds = new Set(target.teams.map((team) => team.id));
+  target.captains = Object.fromEntries(Object.entries(target.captains).filter(([teamId, applicantId]) => {
+    const team = target.teams.find((item) => item.id === teamId);
+    return team && team.members.includes(applicantId);
+  }));
+  target.draft.picked = [...new Set(target.draft.picked.map(String))].filter((id) => validApplicantIds.has(id));
+  target.weaponAssignments = Object.fromEntries(Object.entries(target.weaponAssignments).filter(([teamId, groupId]) => (
+    validTeamIds.has(teamId) && WEAPON_GROUPS.some((group) => group.id === groupId)
+  )));
+  target.scores = target.scores.map((match) => Object.fromEntries(Object.entries(match || {}).filter(([teamId]) => validTeamIds.has(teamId))));
 }
 
 function syncMatchArrays(target = state) {
@@ -247,7 +297,7 @@ function syncMatchArrays(target = state) {
 
 function saveState(renderAfter = true) {
   state.updatedAt = new Date().toISOString();
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  if (!cloud?.configured) localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   scheduleCloudSave();
   if (renderAfter) render();
 }
@@ -287,8 +337,33 @@ function setCloudStatus(text, type = "") {
   status.className = `cloud-status ${type}`.trim();
 }
 
+function resetCloudLandingState() {
+  const apiKey = state.settings.apiKey || runtimeConfig.apiKey || "";
+  cloudLoading = true;
+  state = defaultState();
+  state.settings.apiKey = apiKey;
+  bindSettings();
+  render();
+  cloudLoading = false;
+}
+
+function setCloudCreateError(message = "") {
+  const error = $("#cloudCreateError");
+  error.textContent = message;
+  error.hidden = !message;
+}
+
+function friendlyCloudError(error) {
+  const message = String(error?.message || "");
+  if (/row-level security|permission denied|jwt|session/i.test(message)) return "관리자 로그인이 만료되었습니다. 다시 로그인해 주세요.";
+  if (/duplicate|unique/i.test(message) || error?.code === "23505") return "이미 사용 중인 신청 주소입니다. 주소 칸을 비우고 다시 생성해 주세요.";
+  if (/failed to fetch|network/i.test(message)) return "서버에 연결하지 못했습니다. 잠시 후 다시 시도해 주세요.";
+  return message || "내전을 생성하지 못했습니다. 잠시 후 다시 시도해 주세요.";
+}
+
 function renderCloudControls() {
   const configured = Boolean(cloud?.configured);
+  $("#localApiSettings").hidden = configured;
   $("#cloudUnavailable").hidden = configured;
   $("#adminLoginForm").hidden = !configured || Boolean(cloudSession);
   $("#cloudWorkspace").hidden = !configured || !cloudSession;
@@ -303,18 +378,27 @@ function renderCloudControls() {
     return refreshIcons();
   }
 
-  setCloudStatus(cloudEvent ? "실시간 연결됨" : "내전을 선택하세요", cloudEvent ? "ok" : "manual");
+  const hasEvents = cloudEvents.length > 0;
+  setCloudStatus(cloudEvent ? "실시간 연결됨" : hasEvents ? "내전을 선택하세요" : "첫 내전을 만들어 주세요", cloudEvent ? "ok" : "manual");
   $("#adminAccount").textContent = cloudSession.user.email || "관리자";
   const select = $("#cloudEventSelect");
-  select.innerHTML = cloudEvents.length
+  select.innerHTML = hasEvents
     ? cloudEvents.map((event) => `<option value="${event.id}" ${event.id === cloudEvent?.id ? "selected" : ""}>${escapeHtml(event.name)} · ${escapeHtml(event.slug)}</option>`).join("")
     : `<option value="">생성된 내전이 없습니다</option>`;
-  select.disabled = !cloudEvents.length;
+  select.disabled = !hasEvents;
+  $("#newCloudEvent").hidden = !hasEvents;
+  $("#deleteCloudEvent").hidden = !hasEvents;
+  $("#cloudNoEvents").hidden = hasEvents;
+  $("#createEventForm").hidden = hasEvents && !cloudCreateOpen;
+  $("#cancelCreateEvent").hidden = !hasEvents;
   $("#deleteCloudEvent").disabled = !cloudEvent || !isCloudOwner();
   $("#currentCloudEvent").hidden = !cloudEvent || !isCloudOwner();
   if (cloudEvent && isCloudOwner()) {
     $("#registrationOpen").checked = cloudEvent.registration_open !== false;
-    $("#cloudApplyLink").value = cloudApplyUrl();
+    const applyUrl = cloudApplyUrl();
+    $("#currentCloudEventName").textContent = cloudEvent.name;
+    $("#cloudApplyLink").value = applyUrl;
+    $("#openApplyLink").href = applyUrl;
   }
   updateApplicationAvailability();
   refreshIcons();
@@ -330,8 +414,8 @@ function updateApplicationAvailability() {
   }
   status.hidden = false;
   if (!cloudEvent) {
-    status.className = "cloud-apply-status error";
-    status.textContent = "온라인 신청 링크가 올바르지 않습니다. 관리자에게 받은 내전별 링크로 접속해 주세요.";
+    status.className = "cloud-apply-status closed";
+    status.textContent = "참가 신청은 관리자가 생성한 내전별 링크에서 열립니다.";
     submit.disabled = true;
     return;
   }
@@ -405,10 +489,19 @@ async function loadPublicCloudEvent(slug) {
 async function refreshCloudEvents(preferredId = "") {
   if (!cloudSession) return;
   cloudEvents = await cloud.listEvents(cloudSession.user.id);
-  const selected = preferredId || cloudEvent?.id || cloudEvents[0]?.id || "";
+  const validIds = new Set(cloudEvents.map((event) => event.id));
+  const selected = validIds.has(preferredId)
+    ? preferredId
+    : validIds.has(cloudEvent?.id)
+      ? cloudEvent.id
+      : cloudEvents[0]?.id || "";
+  if (!selected) {
+    cloudEvent = null;
+    cloudCreateOpen = true;
+    resetCloudLandingState();
+  }
   renderCloudControls();
   if (selected) await loadAdminCloudEvent(selected);
-  if (!cloudEvents.length) $("#createEventForm").hidden = false;
 }
 
 async function handleCloudSession(session) {
@@ -430,6 +523,7 @@ async function initializeCloud() {
   cloud = window.ERCloud?.create(runtimeConfig) || { configured: false };
   renderCloudControls();
   if (!cloud.configured) return;
+  if (!cloudEventSlug()) resetCloudLandingState();
   cloudSession = await cloud.session();
   cloud.onAuthChange((session) => {
     if ((session?.user?.id || "") === (cloudSession?.user?.id || "")) return;
@@ -461,7 +555,6 @@ function scheduleCloudSave() {
 function bindSettings() {
   $("#eventName").value = state.settings.eventName;
   $("#apiKey").value = state.settings.apiKey || "";
-  $("#apiBase").value = API_BASE;
   $("#teamMode").value = String(state.settings.teamMode || 3);
   $("#matchCount").value = state.settings.matchCount;
   $("#desiredTeams").value = state.settings.desiredTeams || 8;
@@ -1268,12 +1361,16 @@ function bindEvents() {
     }
   });
   $("#newCloudEvent").addEventListener("click", () => {
-    $("#createEventForm").hidden = false;
+    cloudCreateOpen = true;
+    setCloudCreateError();
+    renderCloudControls();
     $("#newEventName").focus();
   });
   $("#cancelCreateEvent").addEventListener("click", () => {
     $("#createEventForm").reset();
-    $("#createEventForm").hidden = true;
+    cloudCreateOpen = false;
+    setCloudCreateError();
+    renderCloudControls();
   });
   $("#createEventForm").addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -1282,17 +1379,27 @@ function bindEvents() {
     const slug = /^[a-z0-9][a-z0-9-]{2,39}$/.test(enteredSlug)
       ? enteredSlug
       : `match-${new Date().toISOString().slice(0, 10).replaceAll("-", "")}-${crypto.randomUUID().slice(0, 6)}`;
+    const button = $("#createCloudEventButton");
+    setCloudCreateError();
+    button.disabled = true;
+    button.innerHTML = `<i data-lucide="loader-circle"></i> 생성 중`;
+    refreshIcons();
     try {
       const seed = defaultState();
       seed.settings.eventName = name;
       const created = await cloud.createEvent({ ownerId: cloudSession.user.id, name, slug, state: seed });
       $("#createEventForm").reset();
-      $("#createEventForm").hidden = true;
+      cloudCreateOpen = false;
       await refreshCloudEvents(created.id);
       toast("새 내전을 만들었습니다.");
     } catch (error) {
-      const duplicate = error.code === "23505" || /duplicate|unique/i.test(error.message);
-      toast(duplicate ? "이미 사용 중인 신청 주소 코드입니다." : error.message);
+      const message = friendlyCloudError(error);
+      setCloudCreateError(message);
+      toast(message);
+    } finally {
+      button.disabled = false;
+      button.innerHTML = `<i data-lucide="check"></i> 생성`;
+      refreshIcons();
     }
   });
   $("#cloudEventSelect").addEventListener("change", (event) => {
