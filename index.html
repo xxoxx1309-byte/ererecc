@@ -66,6 +66,16 @@
       <div id="rulesDisplay" class="rules-display"></div>
     </section>
 
+    <section class="panel house-rules-summary view-panel empty-house-rules" id="houseRulesSummary" data-view-panel="apply">
+      <div class="section-head">
+        <div>
+          <p class="section-number">HOUSE RULE</p>
+          <h2>적용 하우스룰</h2>
+        </div>
+      </div>
+      <div id="houseRulesDisplay"></div>
+    </section>
+
     <section class="workspace-grid view-panel" id="applicants" data-view-panel="apply">
       <article class="panel registration-panel">
         <div class="section-head">
@@ -178,12 +188,29 @@
         </div>
         <div id="draftBoard" class="draft-board"></div>
       </div>
-      <div class="tail-rule-box">
+      <div class="tail-rule-box" id="tailRuleBox" hidden>
         <div>
           <p class="field-title">꼬리잡기 룰</p>
           <p class="field-help">처음 정해진 금지 대상만 고정됩니다. 중간 팀이 탈락해도 금지 대상은 다음 팀으로 넘어가지 않습니다.</p>
         </div>
         <div id="tailRuleBoard" class="tail-rule-board"></div>
+      </div>
+      <div class="weapon-rule-box" id="weaponRuleBox" hidden>
+        <div class="weapon-rule-head">
+          <div>
+            <p class="field-title">무기군 내전</p>
+            <p class="field-help">공식 API의 무기별 사용 가능 실험체 수와 기본 사거리를 기준으로 근접·원거리 성향을 분산한 5개 그룹입니다.</p>
+          </div>
+          <button class="secondary" id="autoAssignWeaponGroups" type="button">
+            <i data-lucide="repeat-2"></i> 균등 배정
+          </button>
+        </div>
+        <div id="weaponGroupBoard" class="weapon-group-board"></div>
+        <div class="weapon-assignment">
+          <p class="field-title">팀별 무기군 배정</p>
+          <div id="weaponAssignmentBoard" class="weapon-assignment-board"></div>
+        </div>
+        <p class="note">실시간 승률은 공식 API에서 제공하지 않아 반영하지 않습니다. 실험체 선택 폭·기본 사거리·전투 성향을 기준으로 구성했습니다.</p>
       </div>
       <div id="captainBoard" class="captain-board"></div>
       <div id="teamsBoard" class="teams-board"></div>
@@ -321,6 +348,21 @@
         <input id="apiBase" type="hidden" value="https://open-api.bser.io">
         <p class="note">API 키는 GitHub 저장소에 업로드하지 않으며 현재 브라우저의 로컬 저장소에만 보관됩니다.</p>
         <p class="note">API 키가 없으면 랭크 조회만 건너뛰고 참가자 등록은 그대로 사용할 수 있습니다.</p>
+      </fieldset>
+
+      <fieldset>
+        <legend>하우스룰</legend>
+        <div class="house-rule-options">
+          <label class="option-check">
+            <input id="tailChaseEnabled" type="checkbox">
+            꼬리잡기 룰 적용
+          </label>
+          <label class="option-check">
+            <input id="weaponGroupEnabled" type="checkbox">
+            무기군 내전 적용
+          </label>
+        </div>
+        <p class="note">필요한 규칙만 선택하면 신청 화면과 관리자 운영 도구에 함께 표시됩니다.</p>
       </fieldset>
 
       <fieldset>

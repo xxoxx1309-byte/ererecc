@@ -2,7 +2,7 @@ const STORAGE_KEY = "er-custom-match-calculator-v2";
 const LEGACY_STORAGE_KEY = "er-scrim-calculator-v1";
 const API_BASE = "https://open-api.bser.io";
 const DEFAULT_SEASON_ID = 39;
-const STATE_VERSION = 4;
+const STATE_VERSION = 5;
 const ROLES = ["스증원딜", "평원딜", "공격력브루저", "스증브루저", "암살자", "서포터", "탱커"];
 const KOREAN_CHARACTER_NAMES = {
   1: "재키",
@@ -95,6 +95,38 @@ const KOREAN_CHARACTER_NAMES = {
   88: "비형",
   89: "크레이버"
 };
+const WEAPON_GROUPS = [
+  {
+    id: "A",
+    weapons: ["글러브", "망치", "채찍", "카메라", "석궁"],
+    choiceWeight: 20,
+    profile: "근접 압박·제어·원거리 유틸"
+  },
+  {
+    id: "B",
+    weapons: ["톤파", "양손검", "쌍절곤", "아르카나", "활"],
+    choiceWeight: 26,
+    profile: "방어·결투·지속 원거리"
+  },
+  {
+    id: "C",
+    weapons: ["단검", "도끼", "VF의수", "암기", "돌격 소총"],
+    choiceWeight: 24,
+    profile: "암살·브루저·집중 화력"
+  },
+  {
+    id: "D",
+    weapons: ["방망이", "창", "권총", "기타"],
+    choiceWeight: 25,
+    profile: "교전 개시·기동·지원"
+  },
+  {
+    id: "E",
+    weapons: ["쌍검", "레이피어", "투척", "저격총"],
+    choiceWeight: 22,
+    profile: "근접 지속딜·포킹·장거리"
+  }
+];
 const DEFAULT_SCORE_RULE = {
   placement: [10, 7, 5, 4, 3, 2, 1, 0],
   day1Kill: 0.5,
@@ -124,6 +156,8 @@ function defaultState() {
       matchCount: 4,
       desiredTeams: 8,
       teamSize: 3,
+      tailChaseEnabled: false,
+      weaponGroupEnabled: false,
       tournamentScoring: true,
       scoreRule: structuredClone(DEFAULT_SCORE_RULE)
     },
@@ -143,6 +177,7 @@ function defaultState() {
       captainMode: "high",
       picked: []
     },
+    weaponAssignments: {},
     replayCodes: ["", "", "", ""],
     scores: Array.from({ length: 4 }, () => ({})),
     updatedAt: null
@@ -186,6 +221,7 @@ function normalizeState(saved, isLegacy = false) {
     ...(saved.draft || {}),
     picked: Array.isArray(saved.draft?.picked) ? saved.draft.picked : []
   };
+  normalized.weaponAssignments = saved.weaponAssignments || {};
   normalized.replayCodes = Array.isArray(saved.replayCodes) ? saved.replayCodes : [];
   normalized.scores = Array.isArray(saved.scores) ? saved.scores : [];
   syncMatchArrays(normalized);
@@ -227,6 +263,8 @@ function bindSettings() {
   $("#desiredTeams").value = state.settings.desiredTeams || 8;
   $("#teamSize").value = state.settings.teamSize || 3;
   $("#draftCaptainMode").value = state.draft?.captainMode || "high";
+  $("#tailChaseEnabled").checked = state.settings.tailChaseEnabled === true;
+  $("#weaponGroupEnabled").checked = state.settings.weaponGroupEnabled === true;
   $("#tournamentScoring").checked = state.settings.tournamentScoring !== false;
   $("#placementPoints").value = currentScoreRule().placement.join(",");
   $("#day1KillPoint").value = currentScoreRule().day1Kill;
@@ -259,6 +297,8 @@ function readSettings() {
     matchCount: Math.min(12, Math.max(1, Number($("#matchCount").value || 4))),
     desiredTeams: Math.min(12, Math.max(2, Number($("#desiredTeams").value || 8))),
     teamSize: Math.min(4, Math.max(1, Number($("#teamSize").value || 3))),
+    tailChaseEnabled: $("#tailChaseEnabled").checked,
+    weaponGroupEnabled: $("#weaponGroupEnabled").checked,
     tournamentScoring: $("#tournamentScoring").checked,
     scoreRule: {
       placement: placement.length === 8 ? placement : [...DEFAULT_SCORE_RULE.placement],
@@ -592,6 +632,7 @@ function renderTeams() {
   $("#teamCount").textContent = state.teams.length;
   renderDraftBoard();
   renderTailRuleBoard();
+  renderWeaponRuleBoard();
   $("#teamsBoard").innerHTML = state.teams.map((team) => {
     const totalMmr = team.members.reduce((sum, id) => sum + Number(getApplicant(id)?.mmr || 0), 0);
     const members = team.members.map((id, index) => {
@@ -614,17 +655,51 @@ function tailRuleTeams() {
 }
 
 function renderTailRuleBoard() {
+  const box = $("#tailRuleBox");
   const board = $("#tailRuleBoard");
-  if (!board) return;
+  if (!box || !board) return;
+  box.hidden = state.settings.tailChaseEnabled !== true;
+  if (box.hidden) return void (board.innerHTML = "");
   const teams = tailRuleTeams();
   board.innerHTML = teams.map((team, index) => {
     const blocked = teams[(index + 1) % teams.length];
     return `
       <article class="tail-rule-card">
         <span>${escapeHtml(team)}</span>
-        <strong>${escapeHtml(blocked)} 금지</strong>
-        <small>${escapeHtml(team)}은 ${escapeHtml(blocked)}을 잡으면 안 됩니다.</small>
+        <i data-lucide="arrow-right"></i>
+        <strong>${escapeHtml(blocked)}</strong>
+        <small>공격 금지</small>
       </article>`;
+  }).join("");
+}
+
+function renderWeaponRuleBoard() {
+  const box = $("#weaponRuleBox");
+  if (!box) return;
+  box.hidden = state.settings.weaponGroupEnabled !== true;
+  if (box.hidden) return;
+  $("#weaponGroupBoard").innerHTML = WEAPON_GROUPS.map((group) => `
+    <article class="weapon-group-row">
+      <span class="weapon-group-name">${group.id}</span>
+      <div>
+        <strong>${group.id} 무기군</strong>
+        <p>${group.weapons.map((weapon) => `<span>${escapeHtml(weapon)}</span>`).join("")}</p>
+      </div>
+      <small>${escapeHtml(group.profile)}<br>선택 폭 지수 ${group.choiceWeight}</small>
+    </article>`).join("");
+
+  const teams = tailRuleTeams();
+  const validNames = new Set(teams);
+  Object.keys(state.weaponAssignments).forEach((name) => {
+    if (!validNames.has(name)) delete state.weaponAssignments[name];
+  });
+  $("#weaponAssignmentBoard").innerHTML = teams.map((team, index) => {
+    const selected = state.weaponAssignments[team] || WEAPON_GROUPS[index % WEAPON_GROUPS.length].id;
+    return `<label>${escapeHtml(team)}
+      <select data-weapon-assignment="${escapeHtml(team)}">
+        ${WEAPON_GROUPS.map((group) => `<option value="${group.id}" ${group.id === selected ? "selected" : ""}>${group.id} 무기군 · ${group.weapons.join(" / ")}</option>`).join("")}
+      </select>
+    </label>`;
   }).join("");
 }
 
@@ -850,9 +925,31 @@ function renderNotice() {
   rules.textContent = state.eventInfo.rules || "설정에서 일정과 내전 규칙을 작성해 주세요.";
 }
 
+function renderHouseRulesSummary() {
+  const section = $("#houseRulesSummary");
+  const blocks = [];
+  if (state.settings.tailChaseEnabled) {
+    blocks.push(`
+      <article class="house-rule-summary-row">
+        <strong>꼬리잡기</strong>
+        <p>각 팀의 금지 대상은 시작할 때 고정되며, 대상 팀이 탈락해도 다음 팀으로 넘어가지 않습니다.</p>
+      </article>`);
+  }
+  if (state.settings.weaponGroupEnabled) {
+    blocks.push(`
+      <article class="house-rule-summary-row weapon-summary">
+        <strong>무기군 내전</strong>
+        <div>${WEAPON_GROUPS.map((group) => `<p><b>${group.id}</b>${group.weapons.map((weapon) => `<span>${escapeHtml(weapon)}</span>`).join("")}</p>`).join("")}</div>
+      </article>`);
+  }
+  section.classList.toggle("empty-house-rules", !blocks.length);
+  $("#houseRulesDisplay").innerHTML = blocks.join("");
+}
+
 function render() {
   renderOverview();
   renderNotice();
+  renderHouseRulesSummary();
   renderRoles();
   renderTeams();
   renderScores();
@@ -868,6 +965,9 @@ function exportCsv() {
   const rows = [
     ["event", state.settings.eventName],
     ["seasonId", state.settings.seasonId],
+    ["tailChaseEnabled", state.settings.tailChaseEnabled ? "yes" : "no"],
+    ["weaponGroupEnabled", state.settings.weaponGroupEnabled ? "yes" : "no"],
+    ["weaponAssignments", Object.entries(state.weaponAssignments).map(([team, group]) => `${team}:${group}`).join(" / ")],
     ["placementPoints", currentScoreRule().placement.join("/")],
     [],
     ["team", "captain", "members", "total", "match", "replayCode", "place", "day1Kills", "lateKills", "penaltyDeaths", "score", "bans"]
@@ -972,6 +1072,19 @@ function bindEvents() {
       state.draft.picked = state.draft.picked.filter((item) => item !== id);
       saveState();
     }
+  });
+  $("#weaponAssignmentBoard").addEventListener("change", (event) => {
+    const team = event.target.dataset.weaponAssignment;
+    if (!team) return;
+    state.weaponAssignments[team] = event.target.value;
+    saveState();
+  });
+  $("#autoAssignWeaponGroups").addEventListener("click", () => {
+    tailRuleTeams().forEach((team, index) => {
+      state.weaponAssignments[team] = WEAPON_GROUPS[index % WEAPON_GROUPS.length].id;
+    });
+    saveState();
+    toast("무기군을 A부터 순서대로 균등 배정했습니다.");
   });
   $("#clearApplicants").addEventListener("click", () => {
     if (!confirm("참가자와 편성 팀을 모두 삭제할까요?")) return;

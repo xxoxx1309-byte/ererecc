@@ -615,15 +615,17 @@ input:focus, select:focus, textarea:focus {
 
 .tail-rule-board {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 8px;
 }
 
 .tail-rule-card {
   display: grid;
-  gap: 4px;
-  min-height: 86px;
-  padding: 11px;
+  grid-template-columns: minmax(0, 1fr) 18px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 64px;
+  padding: 10px 12px;
   background: var(--surface);
   border: 1px solid #ead8a2;
   border-left: 4px solid var(--rose);
@@ -631,23 +633,95 @@ input:focus, select:focus, textarea:focus {
 }
 
 .tail-rule-card span {
-  color: var(--subtle);
+  color: var(--ink);
   font-family: var(--heading);
-  font-size: 11px;
+  font-size: 14px;
   font-weight: 800;
 }
+
+.tail-rule-card svg { width: 18px; color: #a97800; }
 
 .tail-rule-card strong {
   color: #9b2f30;
   font-family: var(--heading);
-  font-size: 16px;
+  font-size: 14px;
+  white-space: nowrap;
 }
 
 .tail-rule-card small {
-  color: var(--muted);
-  font-size: 11px;
-  line-height: 1.35;
+  padding: 4px 6px;
+  color: #7f2526;
+  background: #ffe6df;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 750;
+  white-space: nowrap;
 }
+
+.weapon-rule-box {
+  display: grid;
+  gap: 14px;
+  margin: 16px 0;
+  padding: 14px;
+  background: #fffdf8;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+}
+
+.weapon-rule-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.weapon-group-board { display: grid; gap: 7px; }
+
+.weapon-group-row {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr) 190px;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  background: var(--surface-2);
+  border-left: 3px solid var(--gold);
+  border-radius: 5px;
+}
+
+.weapon-group-name {
+  display: grid;
+  width: 34px;
+  aspect-ratio: 1;
+  place-items: center;
+  color: #2b251b;
+  background: var(--accent-gradient);
+  border-radius: 5px;
+  font-family: var(--heading);
+  font-weight: 900;
+}
+
+.weapon-group-row strong { font-family: var(--heading); font-size: 13px; }
+.weapon-group-row p { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 5px; }
+.weapon-group-row p span { padding: 3px 6px; background: #fff; border: 1px solid var(--line); border-radius: 4px; font-size: 11px; font-weight: 650; }
+.weapon-group-row small { color: var(--subtle); font-size: 11px; line-height: 1.45; }
+
+.weapon-assignment { display: grid; gap: 8px; padding-top: 12px; border-top: 1px solid var(--line); }
+.weapon-assignment-board { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.weapon-assignment-board label { min-width: 0; }
+.weapon-assignment-board select { min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+
+.house-rule-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.house-rule-options .option-check { min-height: 48px; padding: 10px 12px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 6px; }
+
+.empty-house-rules { display: none !important; }
+#houseRulesDisplay { display: grid; gap: 8px; }
+.house-rule-summary-row { display: grid; grid-template-columns: 130px 1fr; gap: 14px; padding: 12px 0; border-top: 1px solid var(--line); }
+.house-rule-summary-row strong { font-family: var(--heading); }
+.house-rule-summary-row > p { color: var(--muted); font-size: 13px; line-height: 1.55; }
+.weapon-summary > div { display: grid; gap: 5px; }
+.weapon-summary p { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; }
+.weapon-summary b { width: 24px; color: var(--rose); }
+.weapon-summary span { padding: 3px 6px; background: var(--surface-2); border-radius: 4px; font-size: 11px; }
 
 .switch {
   display: inline-flex;
@@ -801,6 +875,7 @@ legend { padding: 0 7px; font-size: 15px; }
   .event-facts { grid-template-columns: repeat(3, 1fr); }
   .notice-grid { grid-template-columns: repeat(2, 1fr); }
   .draft-board { grid-template-columns: 1fr; }
+  .tail-rule-board, .weapon-assignment-board { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .captain-grid, .replay-grid { grid-template-columns: repeat(2, 1fr); }
 }
 
@@ -816,6 +891,13 @@ legend { padding: 0 7px; font-size: 15px; }
   .section-head { align-items: flex-start; flex-direction: column; }
   .lookup-row, .form-grid, .team-controls, .settings-grid, .api-key-row, .rule-grid, .notice-grid { grid-template-columns: 1fr; }
   .draft-head, .draft-actions { align-items: stretch; flex-direction: column; }
+  .weapon-rule-head { align-items: stretch; flex-direction: column; }
+  .tail-rule-board, .weapon-assignment-board, .house-rule-options { grid-template-columns: 1fr; }
+  .tail-rule-card { grid-template-columns: minmax(0, 1fr) 18px minmax(0, 1fr); }
+  .tail-rule-card small { grid-column: 1 / -1; justify-self: start; }
+  .weapon-group-row { grid-template-columns: 34px minmax(0, 1fr); }
+  .weapon-group-row small { grid-column: 2; }
+  .house-rule-summary-row { grid-template-columns: 1fr; gap: 7px; }
   .event-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .role-grid { grid-template-columns: repeat(2, 1fr); }
   .captain-grid, .replay-grid { grid-template-columns: 1fr; }
