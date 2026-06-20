@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#fffdf8">
   <title>이터널 리턴 내전 계산기</title>
   <link rel="icon" type="image/svg+xml" href="./favicon.svg">
-  <link rel="stylesheet" href="./style.css?v=20260620-5">
+  <link rel="stylesheet" href="./style.css?v=20260620-6">
 </head>
 <body>
   <header class="topbar">
@@ -198,6 +198,18 @@
       </div>
       <div id="eventFacts" class="event-facts"></div>
       <div id="rulesDisplay" class="rules-display"></div>
+    </section>
+
+    <section class="panel view-panel" id="publicRoster" data-view-panel="apply">
+      <div class="section-head">
+        <div>
+          <p class="section-number">ROSTER</p>
+          <h2>참가 멤버</h2>
+        </div>
+        <span class="status-chip ok">공개 명단</span>
+      </div>
+      <p class="field-help">운영 정보는 제외하고 인게임 닉네임·팀·MMR·역할·모스트만 표시합니다.</p>
+      <div id="publicRosterBoard" class="public-roster-grid"></div>
     </section>
 
     <section class="panel house-rules-summary view-panel empty-house-rules" id="houseRulesSummary" data-view-panel="apply">
@@ -577,8 +589,8 @@
 
   <script src="./config.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="./cloud.js?v=20260620-5"></script>
+  <script src="./cloud.js?v=20260620-6"></script>
   <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
-  <script src="./app.js?v=20260620-5"></script>
+  <script src="./app.js?v=20260620-6"></script>
 </body>
 </html>
