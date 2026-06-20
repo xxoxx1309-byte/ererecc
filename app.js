@@ -604,7 +604,7 @@ async function loadPublicCloudEvent(slug) {
   if (canManageCloudEvent()) subscribeCloudApplicants();
 }
 
-async function refreshCloudEvents(preferredId = "") {
+async function refreshCloudEvents(preferredId = "", openSelected = true) {
   if (!cloudSession || !cloudOperator) return;
   cloudEvents = await cloud.listEvents();
   const validIds = new Set(cloudEvents.map((event) => event.id));
@@ -619,10 +619,10 @@ async function refreshCloudEvents(preferredId = "") {
     resetCloudLandingState();
   }
   renderCloudControls();
-  if (selected) await loadAdminCloudEvent(selected);
+  if (selected && openSelected) await loadAdminCloudEvent(selected);
 }
 
-async function handleCloudSession(session) {
+async function handleCloudSession(session, preserveApplyView = false) {
   cloudSession = session;
   if (!session) {
     cloudEvents = [];
@@ -636,7 +636,7 @@ async function handleCloudSession(session) {
   clearOtpStep(false);
   cloudOperator = await cloud.operatorProfile(session.user.email || "");
   cloudOperators = isSiteOwner() ? await cloud.listOperators() : [];
-  if (cloudOperator) await refreshCloudEvents();
+  if (cloudOperator) await refreshCloudEvents(cloudEvent?.id || "", !preserveApplyView);
   else cloudEvents = [];
   const slug = cloudEventSlug();
   if (slug && cloudEvent?.slug !== slug) await loadPublicCloudEvent(slug);
@@ -661,7 +661,8 @@ async function initializeCloud() {
   });
   const slug = cloudEventSlug();
   if (slug) await loadPublicCloudEvent(slug);
-  if (cloudSession) await handleCloudSession(cloudSession);
+  const preserveApplyView = Boolean(slug && location.hash === "#apply");
+  if (cloudSession) await handleCloudSession(cloudSession, preserveApplyView);
   renderCloudControls();
 }
 
