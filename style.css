@@ -515,7 +515,7 @@ input:focus, select:focus, textarea:focus {
 
 .team-controls {
   display: grid;
-  grid-template-columns: 130px 130px 1fr;
+  grid-template-columns: 130px 130px 180px 1fr;
   align-items: end;
   gap: 10px;
   margin-bottom: 18px;

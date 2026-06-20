@@ -179,6 +179,7 @@ function defaultState() {
       matchCount: 4,
       desiredTeams: 8,
       teamSize: 3,
+      mmrBasis: "current",
       tailChaseEnabled: false,
       weaponGroupEnabled: false,
       tournamentScoring: true,
@@ -265,6 +266,8 @@ function sanitizeStateRelations(target) {
     seenNicknames.add(nickname);
     applicant.id = id;
     applicant.nickname = String(applicant.nickname).trim();
+    applicant.currentMmr = Number(applicant.currentMmr ?? applicant.mmr ?? 0);
+    applicant.peakMmr = Number(applicant.peakMmr ?? applicant.mmr ?? 0);
     applicant.roles = [...new Set(Array.isArray(applicant.roles) ? applicant.roles.filter((role) => ROLES.includes(role)) : [])].slice(0, 3);
     return true;
   });
@@ -694,6 +697,7 @@ function bindSettings() {
   $("#matchCount").value = state.settings.matchCount;
   $("#desiredTeams").value = state.settings.desiredTeams || 8;
   $("#teamSize").value = state.settings.teamSize || 3;
+  $("#mmrBasis").value = state.settings.mmrBasis || "current";
   $("#draftCaptainMode").value = state.draft?.captainMode || "high";
   $("#tailChaseEnabled").checked = state.settings.tailChaseEnabled === true;
   $("#weaponGroupEnabled").checked = state.settings.weaponGroupEnabled === true;
@@ -729,6 +733,7 @@ function readSettings() {
     matchCount: Math.min(12, Math.max(1, Number($("#matchCount").value || 4))),
     desiredTeams: Math.min(12, Math.max(2, Number($("#desiredTeams").value || 8))),
     teamSize: Math.min(4, Math.max(1, Number($("#teamSize").value || 3))),
+    mmrBasis: $("#mmrBasis").value === "peak" ? "peak" : "current",
     tailChaseEnabled: $("#tailChaseEnabled").checked,
     weaponGroupEnabled: $("#weaponGroupEnabled").checked,
     tournamentScoring: $("#tournamentScoring").checked,
@@ -888,11 +893,13 @@ async function lookupRank() {
     const teamMode = state.settings.teamMode;
     let user;
     let rankJson;
+    let peakJson;
     let statsJson;
     if (useCloudLookup) {
       const result = await cloud.rankLookup({ nickname, seasonId, teamMode });
       user = result.user;
       rankJson = { userRank: result.rank || {} };
+      peakJson = result.peak || result.rank || {};
       statsJson = { userStats: [result.stats || {}] };
     } else {
       const userJson = await erFetch(`v1/user/nickname?query=${encodeURIComponent(nickname)}`);
@@ -903,6 +910,7 @@ async function lookupRank() {
         erFetch(`v1/rank/uid/${userId}/${seasonId}/${teamMode}`),
         erFetch(`v2/user/stats/uid/${userId}/${seasonId}/3`)
       ]);
+      peakJson = rankJson.userRank || {};
     }
     const stats = (statsJson.userStats || []).find((item) => Number(item.matchingTeamMode) === teamMode) || statsJson.userStats?.[0] || {};
     const mostStats = (stats.characterStats || [])
@@ -920,6 +928,9 @@ async function lookupRank() {
       userId: user.userId,
       nickname,
       mmr: rankJson.userRank?.mmr ?? stats.mmr ?? 0,
+      currentMmr: rankJson.userRank?.mmr ?? stats.mmr ?? 0,
+      peakMmr: peakJson?.mmr ?? rankJson.userRank?.mmr ?? stats.mmr ?? 0,
+      peakSeasonId: peakJson?.seasonId ?? seasonId,
       rank: rankJson.userRank?.rank ?? stats.rank ?? 0,
       totalGames: stats.totalGames ?? 0,
       totalWins: stats.totalWins ?? 0,
@@ -964,7 +975,8 @@ function updateRankPreview(data, stateName = "success") {
         <span>${escapeHtml($("#seasonId").selectedOptions[0]?.textContent || "")} · ${teamModeLabel()}</span>
       </div>
       <div class="rank-metrics">
-        <div><span>MMR</span><strong>${formatNumber(data.mmr)}</strong></div>
+        <div><span>현재 MMR</span><strong>${formatNumber(data.currentMmr ?? data.mmr)}</strong></div>
+        <div><span>최근 5시즌 최고</span><strong>${formatNumber(data.peakMmr ?? data.mmr)}</strong></div>
         <div><span>랭킹</span><strong>${data.rank ? `${formatNumber(data.rank)}위` : "-"}</strong></div>
         <div><span>랭크 게임</span><strong>${formatNumber(data.totalGames)}</strong></div>
         <div><span>승률</span><strong>${winRate}</strong><small>${winRecord}</small></div>
@@ -1004,6 +1016,9 @@ async function submitApplicant(event) {
     roles: [...selectedRoles],
     userId: rankCache?.userId || null,
     mmr: Number($("#manualMmr").value || rankCache?.mmr || 0),
+    currentMmr: Number($("#manualMmr").value || rankCache?.currentMmr || rankCache?.mmr || 0),
+    peakMmr: Number(rankCache?.peakMmr || $("#manualMmr").value || rankCache?.mmr || 0),
+    peakSeasonId: rankCache?.peakSeasonId || state.settings.seasonId,
     rank: Number($("#manualRank").value || rankCache?.rank || 0),
     totalGames: rankCache?.totalGames || 0,
     totalWins: rankCache?.totalWins || 0,
@@ -1053,7 +1068,7 @@ function makeTeams() {
   const maxPlayers = desiredTeams * teamSize;
   const sorted = state.applicants
     .slice()
-    .sort((a, b) => Number(b.mmr || 0) - Number(a.mmr || 0))
+    .sort((a, b) => applicantMmr(b) - applicantMmr(a))
     .slice(0, maxPlayers);
   const teams = Array.from({ length: desiredTeams }, (_, index) => ({
     id: crypto.randomUUID(),
@@ -1076,6 +1091,7 @@ function makeTeams() {
 function readTeamControls() {
   state.settings.desiredTeams = Math.min(12, Math.max(2, Number($("#desiredTeams").value || 8)));
   state.settings.teamSize = Math.min(4, Math.max(1, Number($("#teamSize").value || 3)));
+  state.settings.mmrBasis = $("#mmrBasis").value === "peak" ? "peak" : "current";
 }
 
 function normalizeScores() {
@@ -1091,6 +1107,13 @@ function normalizeScores() {
 
 function getApplicant(id) {
   return state.applicants.find((item) => item.id === id);
+}
+
+function applicantMmr(player) {
+  if (!player) return 0;
+  return Number(state.settings.mmrBasis === "peak"
+    ? (player.peakMmr ?? player.mmr ?? 0)
+    : (player.currentMmr ?? player.mmr ?? 0));
 }
 
 function scoreFor(entry = {}) {
@@ -1112,7 +1135,7 @@ function renderTeams() {
   renderTailRuleBoard();
   renderWeaponRuleBoard();
   $("#teamsBoard").innerHTML = state.teams.map((team) => {
-    const totalMmr = team.members.reduce((sum, id) => sum + Number(getApplicant(id)?.mmr || 0), 0);
+    const totalMmr = team.members.reduce((sum, id) => sum + applicantMmr(getApplicant(id)), 0);
     const members = team.members.map((id, index) => {
       const player = getApplicant(id);
       if (!player) return "";
@@ -1121,7 +1144,7 @@ function renderTeams() {
       const roleOrder = (player.roles || []).map((role, roleIndex) => `${roleIndex + 1}. ${role}`).join(" / ");
       return `<li class="team-member-row${captain ? " captain" : " draggable"}" data-team-member="${team.id}|${player.id}" draggable="${captain ? "false" : "true"}">
         <div>${captain ? "팀장 · " : ""}${escapeHtml(name)}<span class="role-tag">${escapeHtml(player.roles?.[0] || "-")}</span></div>
-        <small>MMR ${formatNumber(player.mmr)} · ${escapeHtml(roleOrder || "역할군 미지정")}</small>
+        <small>${state.settings.mmrBasis === "peak" ? "최고" : "현재"} MMR ${formatNumber(applicantMmr(player))} · ${escapeHtml(roleOrder || "역할군 미지정")}</small>
       </li>`;
     }).join("");
     return `<article class="team-card" data-drop-team="${team.id}"><header><span>${team.name}</span><span>합계 ${formatNumber(totalMmr)}</span></header><ol>${members}</ol></article>`;
@@ -1192,8 +1215,8 @@ function sortedApplicantsByMmr(ascending = false) {
   return state.applicants
     .slice()
     .sort((a, b) => ascending
-      ? Number(a.mmr || 0) - Number(b.mmr || 0)
-      : Number(b.mmr || 0) - Number(a.mmr || 0));
+      ? applicantMmr(a) - applicantMmr(b)
+      : applicantMmr(b) - applicantMmr(a));
 }
 
 function draftCaptainIds() {
@@ -1217,7 +1240,7 @@ function renderManualCaptainSelects() {
           ${applicants.map((player) => {
             const usedElsewhere = selected.includes(player.id) && selected[index] !== player.id;
             const name = player.discordName || player.nickname;
-            return `<option value="${player.id}" ${selected[index] === player.id ? "selected" : ""} ${usedElsewhere ? "disabled" : ""}>${escapeHtml(name)} · MMR ${formatNumber(player.mmr)}</option>`;
+            return `<option value="${player.id}" ${selected[index] === player.id ? "selected" : ""} ${usedElsewhere ? "disabled" : ""}>${escapeHtml(name)} · MMR ${formatNumber(applicantMmr(player))}</option>`;
           }).join("")}
         </select>
       </label>`).join("")}
@@ -1266,7 +1289,7 @@ function draftPlayerButton(player, index, action) {
   return `<button class="draft-player ${action}" type="button"${token}${disabled}>
     <span>${index}</span>
     <strong>${escapeHtml(name)}</strong>
-    <small>MMR ${formatNumber(player.mmr)} · ${escapeHtml(role)}</small>
+    <small>MMR ${formatNumber(applicantMmr(player))} · ${escapeHtml(role)}</small>
   </button>`;
 }
 
@@ -1391,7 +1414,7 @@ function renderApplicants() {
       <td>${escapeHtml(player.discordName || "-")}</td>
       <td><span class="role-tag">${escapeHtml(player.roles?.[0] || "-")}</span></td>
       <td>${escapeHtml(player.roles?.slice(1).join(" / ") || "-")}</td>
-      <td>${formatNumber(player.mmr)}</td>
+      <td>${formatNumber(applicantMmr(player))}<br><small>${state.settings.mmrBasis === "peak" ? "최고" : "현재"} 기준</small></td>
       <td>${player.rank ? `${formatNumber(player.rank)}위` : "-"}</td>
       <td>${formatWinRate(player.totalWins, player.totalGames)}</td>
       <td><div class="roster-most">${renderRosterMost(player)}</div></td>
@@ -1409,7 +1432,8 @@ function openApplicantEditor(applicantId) {
   editingApplicantId = applicantId;
   $("#editNickname").value = player.nickname || "";
   $("#editDiscordName").value = player.discordName || "";
-  $("#editMmr").value = Number(player.mmr || 0);
+  $("#editMmr").value = Number(player.currentMmr ?? player.mmr ?? 0);
+  $("#editPeakMmr").value = Number(player.peakMmr ?? player.mmr ?? 0);
   $("#editRank").value = Number(player.rank || 0);
   $("#editTotalGames").value = Number(player.totalGames || 0);
   $("#editTotalWins").value = Number(player.totalWins || 0);
@@ -1443,6 +1467,8 @@ async function saveApplicantEdit(event) {
     nickname: $("#editNickname").value.trim(),
     discordName: $("#editDiscordName").value.trim(),
     mmr: Math.max(0, Number($("#editMmr").value || 0)),
+    currentMmr: Math.max(0, Number($("#editMmr").value || 0)),
+    peakMmr: Math.max(0, Number($("#editPeakMmr").value || 0)),
     rank: Math.max(0, Number($("#editRank").value || 0)),
     totalGames,
     totalWins,
@@ -1824,6 +1850,11 @@ function bindEvents() {
   $("#teamSize").addEventListener("change", () => {
     readTeamControls();
     saveState();
+  });
+  $("#mmrBasis").addEventListener("change", () => {
+    readTeamControls();
+    saveState();
+    toast(state.settings.mmrBasis === "peak" ? "최근 5시즌 최고 MMR 기준을 적용했습니다." : "현재 시즌 MMR 기준을 적용했습니다.");
   });
   $("#draftCaptainMode").addEventListener("change", (event) => {
     state.draft.captainMode = event.target.value;
