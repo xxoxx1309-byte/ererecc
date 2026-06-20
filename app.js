@@ -1867,6 +1867,16 @@ function bindEvents() {
       setView(button.dataset.viewTarget);
     });
   });
+  $("#googleLoginButton").addEventListener("click", async () => {
+    const button = $("#googleLoginButton");
+    button.disabled = true;
+    try {
+      await cloud.signInWithGoogle();
+    } catch (error) {
+      button.disabled = false;
+      toast(friendlyAuthError(error));
+    }
+  });
   $("#adminLoginForm").addEventListener("submit", async (event) => {
     event.preventDefault();
     const email = $("#adminEmail").value.trim().toLowerCase();

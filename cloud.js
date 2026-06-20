@@ -127,6 +127,17 @@
         return data.session;
       },
 
+      async signInWithGoogle() {
+        const redirectUrl = new URL(window.location.href);
+        redirectUrl.hash = "";
+        const { data, error } = await client.auth.signInWithOAuth({
+          provider: "google",
+          options: { redirectTo: redirectUrl.toString() }
+        });
+        if (error) throw error;
+        return data;
+      },
+
       async signOut() {
         const { error } = await client.auth.signOut();
         if (error) throw error;
