@@ -197,6 +197,7 @@ function defaultState() {
     captains: {},
     draft: {
       captainMode: "high",
+      captains: [],
       picked: []
     },
     weaponAssignments: {},
@@ -241,6 +242,7 @@ function normalizeState(saved, isLegacy = false) {
   normalized.draft = {
     ...base.draft,
     ...(saved.draft || {}),
+    captains: Array.isArray(saved.draft?.captains) ? saved.draft.captains : [],
     picked: Array.isArray(saved.draft?.picked) ? saved.draft.picked : []
   };
   normalized.weaponAssignments = saved.weaponAssignments || {};
@@ -288,6 +290,7 @@ function sanitizeStateRelations(target) {
     return team && team.members.includes(applicantId);
   }));
   target.draft.picked = [...new Set(target.draft.picked.map(String))].filter((id) => validApplicantIds.has(id));
+  target.draft.captains = [...new Set(target.draft.captains.map(String))].filter((id) => validApplicantIds.has(id));
   target.weaponAssignments = Object.fromEntries(Object.entries(target.weaponAssignments).filter(([teamId, groupId]) => (
     validTeamIds.has(teamId) && WEAPON_GROUPS.some((group) => group.id === groupId)
   )));
@@ -1172,7 +1175,31 @@ function sortedApplicantsByMmr(ascending = false) {
 
 function draftCaptainIds() {
   const count = Math.min(Number(state.settings.desiredTeams || 8), state.applicants.length);
+  if (state.draft?.captainMode === "manual") return (state.draft.captains || []).slice(0, count);
   return sortedApplicantsByMmr(state.draft?.captainMode === "low").slice(0, count).map((player) => player.id);
+}
+
+function renderManualCaptainSelects() {
+  if (state.draft?.captainMode !== "manual") return "";
+  const count = Math.min(Number(state.settings.desiredTeams || 8), state.applicants.length);
+  const selected = state.draft.captains || [];
+  const applicants = sortedApplicantsByMmr();
+  return `<div class="manual-captain-box">
+    <p class="field-title">팀장 미리 지정</p>
+    <p class="field-help">팀장으로 참가할 사람을 팀 수만큼 선택하세요. 선택된 사람은 남은 인원에서 제외됩니다.</p>
+    <div class="manual-captain-grid">
+      ${Array.from({ length: count }, (_, index) => `<label>팀장 ${index + 1}
+        <select data-draft-captain-slot="${index}">
+          <option value="">미정</option>
+          ${applicants.map((player) => {
+            const usedElsewhere = selected.includes(player.id) && selected[index] !== player.id;
+            const name = player.discordName || player.nickname;
+            return `<option value="${player.id}" ${selected[index] === player.id ? "selected" : ""} ${usedElsewhere ? "disabled" : ""}>${escapeHtml(name)} · MMR ${formatNumber(player.mmr)}</option>`;
+          }).join("")}
+        </select>
+      </label>`).join("")}
+    </div>
+  </div>`;
 }
 
 function renderDraftBoard() {
@@ -1191,8 +1218,10 @@ function renderDraftBoard() {
   const remaining = sortedApplicantsByMmr().filter((player) => !captainIds.has(player.id) && !pickedIds.has(player.id));
   const picked = sortedApplicantsByMmr().filter((player) => pickedIds.has(player.id));
   board.innerHTML = `
+    ${renderManualCaptainSelects()}
+    <div class="draft-columns">
     <div class="draft-column captains">
-      <h3>팀장 후보 <span>${captains.length}</span></h3>
+      <h3>${state.draft?.captainMode === "manual" ? "지정된 팀장" : "팀장 후보"} <span>${captains.length}</span></h3>
       <div class="draft-list">${captains.map((player, index) => draftPlayerButton(player, index + 1, "captain")).join("") || "<p class=\"empty\">없음</p>"}</div>
     </div>
     <div class="draft-column">
@@ -1202,6 +1231,7 @@ function renderDraftBoard() {
     <div class="draft-column picked">
       <h3>뽑힘 <span>${picked.length}</span></h3>
       <div class="draft-list">${picked.map((player, index) => draftPlayerButton(player, index + 1, "unpick")).join("") || "<p class=\"empty\">아직 체크된 인원이 없습니다.</p>"}</div>
+    </div>
     </div>`;
 }
 
@@ -1728,6 +1758,16 @@ function bindEvents() {
       state.draft.picked = state.draft.picked.filter((item) => item !== id);
       saveState();
     }
+  });
+  $("#draftBoard").addEventListener("change", (event) => {
+    const slot = event.target.dataset.draftCaptainSlot;
+    if (slot === undefined) return;
+    const index = Number(slot);
+    const captains = [...(state.draft.captains || [])];
+    captains[index] = event.target.value;
+    state.draft.captains = captains.filter(Boolean);
+    state.draft.picked = state.draft.picked.filter((id) => !state.draft.captains.includes(id));
+    saveState();
   });
   $("#weaponAssignmentBoard").addEventListener("change", (event) => {
     const team = event.target.dataset.weaponAssignment;

@@ -629,6 +629,32 @@ input:focus, select:focus, textarea:focus {
 .draft-player.unpick { border-color: #eac3aa; background: #fff5ef; }
 .draft-player.captain { cursor: default; opacity: .78; }
 
+.manual-captain-box {
+  grid-column: 1 / -1;
+  margin-bottom: 12px;
+  padding: 14px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+}
+
+.manual-captain-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.manual-captain-grid label { min-width: 0; }
+.manual-captain-grid select { width: 100%; }
+
+.draft-columns {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
 .tail-rule-box {
   display: grid;
   gap: 12px;
@@ -959,6 +985,8 @@ legend { padding: 0 7px; font-size: 15px; }
   .event-facts { grid-template-columns: repeat(3, 1fr); }
   .notice-grid { grid-template-columns: repeat(2, 1fr); }
   .draft-board { grid-template-columns: 1fr; }
+  .draft-columns { grid-template-columns: 1fr; }
+  .manual-captain-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .tail-rule-board, .weapon-assignment-board { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .captain-grid, .replay-grid { grid-template-columns: repeat(2, 1fr); }
 }
@@ -978,6 +1006,7 @@ legend { padding: 0 7px; font-size: 15px; }
   .draft-head, .draft-actions { align-items: stretch; flex-direction: column; }
   .weapon-rule-head { align-items: stretch; flex-direction: column; }
   .tail-rule-board, .weapon-assignment-board, .house-rule-options { grid-template-columns: 1fr; }
+  .manual-captain-grid { grid-template-columns: 1fr; }
   .tail-rule-card { grid-template-columns: minmax(0, 1fr) 18px minmax(0, 1fr); }
   .tail-rule-card small { grid-column: 1 / -1; justify-self: start; }
   .weapon-group-row { grid-template-columns: 34px minmax(0, 1fr); }
