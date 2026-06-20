@@ -102,12 +102,18 @@
         return () => data.subscription.unsubscribe();
       },
 
-      async sendMagicLink(email) {
+      async sendOtp(email) {
         const { error } = await client.auth.signInWithOtp({
           email,
-          options: { emailRedirectTo: `${location.origin}${location.pathname}#admin` }
+          options: { shouldCreateUser: true }
         });
         if (error) throw error;
+      },
+
+      async verifyOtp(email, token) {
+        const { data, error } = await client.auth.verifyOtp({ email, token, type: "email" });
+        if (error) throw error;
+        return data.session;
       },
 
       async signOut() {

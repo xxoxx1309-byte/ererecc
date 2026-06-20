@@ -771,6 +771,10 @@ input:focus, select:focus, textarea:focus {
 .cloud-empty p { margin-top: 3px; font-size: 12px; }
 .cloud-login { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 9px; }
 .cloud-login p { grid-column: 1 / -1; color: var(--subtle); font-size: 12px; line-height: 1.5; }
+.otp-login input { font-family: var(--heading); font-size: 20px; font-weight: 800; letter-spacing: 6px; text-align: center; }
+.otp-actions { grid-column: 1 / -1; display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+.otp-actions span { min-width: 0; margin-right: auto; overflow: hidden; color: var(--subtle); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.otp-actions button { min-height: 34px; padding: 5px 9px; font-size: 11px; }
 .cloud-workspace { display: grid; gap: 12px; }
 .cloud-account-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
 .cloud-account-row span { color: var(--subtle); font-size: 12px; font-weight: 700; }

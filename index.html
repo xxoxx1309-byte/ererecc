@@ -71,13 +71,28 @@
       </div>
 
       <form id="adminLoginForm" class="cloud-login" hidden>
-        <label>관리자 이메일
-          <input id="adminEmail" type="email" autocomplete="email" required placeholder="로그인 링크를 받을 이메일">
+        <label>운영자 이메일
+          <input id="adminEmail" type="email" autocomplete="email" required placeholder="인증번호를 받을 이메일">
         </label>
-        <button class="primary" type="submit">
-          <i data-lucide="mail"></i> 로그인 링크 받기
+        <button class="primary" id="sendOtpButton" type="submit">
+          <i data-lucide="mail"></i> 인증번호 받기
         </button>
-        <p>등록된 운영자는 API 키 없이 이메일 로그인만으로 내전을 만들고 관리할 수 있습니다.</p>
+        <p>등록된 운영자는 API 키 없이 이메일로 받은 6자리 번호만 입력하면 됩니다.</p>
+      </form>
+
+      <form id="adminOtpForm" class="cloud-login otp-login" hidden>
+        <label>6자리 인증번호
+          <input id="adminOtp" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" required placeholder="000000">
+        </label>
+        <button class="primary" id="verifyOtpButton" type="submit">
+          <i data-lucide="shield-check"></i> 확인
+        </button>
+        <div class="otp-actions">
+          <span id="otpSentTo"></span>
+          <button class="text-button" id="resendOtp" type="button">재전송</button>
+          <button class="text-button" id="changeOtpEmail" type="button">이메일 변경</button>
+        </div>
+        <p id="otpError" class="form-error" role="alert" hidden></p>
       </form>
 
       <div id="cloudWorkspace" class="cloud-workspace" hidden>

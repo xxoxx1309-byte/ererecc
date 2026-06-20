@@ -133,6 +133,9 @@ const DEFAULT_SCORE_RULE = {
   lateKill: 1,
   penaltyDeath: 1
 };
+const OTP_COOLDOWN_MS = 60_000;
+const OTP_EMAIL_KEY = "er-admin-otp-email";
+const OTP_SENT_AT_KEY = "er-admin-otp-sent-at";
 
 let state = loadState();
 let selectedRoles = [];
@@ -157,6 +160,9 @@ let cloudApplicantUnsubscribe = null;
 let cloudSaveTimer = null;
 let cloudLoading = false;
 let cloudCreateOpen = false;
+let otpEmail = sessionStorage.getItem(OTP_EMAIL_KEY) || "";
+let otpSentAt = Number(sessionStorage.getItem(OTP_SENT_AT_KEY) || 0);
+let otpCooldownTimer = null;
 
 const $ = (selector) => document.querySelector(selector);
 
@@ -373,6 +379,65 @@ function setOperatorError(message = "") {
   error.hidden = !message;
 }
 
+function setOtpError(message = "") {
+  const error = $("#otpError");
+  error.textContent = message;
+  error.hidden = !message;
+}
+
+function otpCooldownSeconds() {
+  return Math.max(0, Math.ceil((OTP_COOLDOWN_MS - (Date.now() - otpSentAt)) / 1000));
+}
+
+function renderOtpCooldown() {
+  const button = $("#resendOtp");
+  const seconds = otpCooldownSeconds();
+  button.disabled = seconds > 0;
+  button.textContent = seconds > 0 ? `재전송 (${seconds}초)` : "재전송";
+  if (!seconds && otpCooldownTimer) {
+    clearInterval(otpCooldownTimer);
+    otpCooldownTimer = null;
+  }
+}
+
+function startOtpCooldown() {
+  clearInterval(otpCooldownTimer);
+  renderOtpCooldown();
+  if (otpCooldownSeconds() > 0) otpCooldownTimer = setInterval(renderOtpCooldown, 1000);
+}
+
+function showOtpStep(email, sentNow = false) {
+  otpEmail = email.trim().toLowerCase();
+  sessionStorage.setItem(OTP_EMAIL_KEY, otpEmail);
+  if (sentNow) {
+    otpSentAt = Date.now();
+    sessionStorage.setItem(OTP_SENT_AT_KEY, String(otpSentAt));
+  }
+  setOtpError();
+  renderCloudControls();
+  startOtpCooldown();
+  $("#adminOtp").focus();
+}
+
+function clearOtpStep(renderAfter = true) {
+  otpEmail = "";
+  otpSentAt = 0;
+  sessionStorage.removeItem(OTP_EMAIL_KEY);
+  sessionStorage.removeItem(OTP_SENT_AT_KEY);
+  clearInterval(otpCooldownTimer);
+  otpCooldownTimer = null;
+  $("#adminOtpForm").reset();
+  setOtpError();
+  if (renderAfter) renderCloudControls();
+}
+
+function friendlyAuthError(error) {
+  const message = String(error?.message || "");
+  if (/rate limit|security purposes|after \d+ seconds/i.test(message)) return "인증번호는 60초 후 다시 요청할 수 있습니다.";
+  if (/expired|invalid|token/i.test(message)) return "인증번호가 틀렸거나 만료되었습니다. 새 번호를 요청해 주세요.";
+  return message || "인증 처리에 실패했습니다. 잠시 후 다시 시도해 주세요.";
+}
+
 function friendlyCloudError(error) {
   const message = String(error?.message || "");
   if (/row-level security|permission denied|jwt|session/i.test(message)) return "관리자 로그인이 만료되었습니다. 다시 로그인해 주세요.";
@@ -392,11 +457,17 @@ function renderOperatorList() {
 
 function renderCloudControls() {
   const configured = Boolean(cloud?.configured);
+  const awaitingOtp = configured && !cloudSession && Boolean(otpEmail);
   document.body.classList.toggle("cloud-readonly-admin", configured && !cloudOperator);
   $("#localApiSettings").hidden = configured;
   $("#cloudUnavailable").hidden = configured;
-  $("#adminLoginForm").hidden = !configured || Boolean(cloudSession);
+  $("#adminLoginForm").hidden = !configured || Boolean(cloudSession) || awaitingOtp;
+  $("#adminOtpForm").hidden = !awaitingOtp;
   $("#cloudWorkspace").hidden = !configured || !cloudSession;
+  if (awaitingOtp) {
+    $("#otpSentTo").textContent = `${otpEmail}로 인증번호를 보냈습니다.`;
+    startOtpCooldown();
+  }
   updateViewAvailability();
   if (!configured) {
     setCloudStatus("브라우저 저장 모드", "manual");
@@ -562,6 +633,7 @@ async function handleCloudSession(session) {
     renderCloudControls();
     return;
   }
+  clearOtpStep(false);
   cloudOperator = await cloud.operatorProfile(session.user.email || "");
   cloudOperators = isSiteOwner() ? await cloud.listOperators() : [];
   if (cloudOperator) await refreshCloudEvents();
@@ -572,6 +644,12 @@ async function handleCloudSession(session) {
 }
 
 async function initializeCloud() {
+  if (location.hash.includes("error_code=")) {
+    const url = new URL(location.href);
+    url.hash = "admin";
+    history.replaceState(null, "", url);
+    toast("이전 이메일 링크는 사용하지 않습니다. 새 인증번호를 요청해 주세요.");
+  }
   cloud = window.ERCloud?.create(runtimeConfig) || { configured: false };
   renderCloudControls();
   if (!cloud.configured) return;
@@ -1399,12 +1477,62 @@ function bindEvents() {
   });
   $("#adminLoginForm").addEventListener("submit", async (event) => {
     event.preventDefault();
+    const email = $("#adminEmail").value.trim().toLowerCase();
+    const button = $("#sendOtpButton");
+    button.disabled = true;
     try {
-      await cloud.sendMagicLink($("#adminEmail").value.trim());
-      toast("이메일로 로그인 링크를 보냈습니다.");
+      await cloud.sendOtp(email);
+      showOtpStep(email, true);
+      toast("6자리 인증번호를 보냈습니다.");
     } catch (error) {
-      toast(error.message);
+      toast(friendlyAuthError(error));
+    } finally {
+      button.disabled = false;
     }
+  });
+  $("#adminOtpForm").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const token = $("#adminOtp").value.replace(/\D/g, "");
+    if (token.length !== 6) return setOtpError("6자리 인증번호를 입력해 주세요.");
+    const button = $("#verifyOtpButton");
+    button.disabled = true;
+    setOtpError();
+    try {
+      const session = await cloud.verifyOtp(otpEmail, token);
+      clearOtpStep(false);
+      if (session && session.user.id !== cloudSession?.user?.id) await handleCloudSession(session);
+      renderCloudControls();
+      toast("운영자 인증이 완료되었습니다.");
+    } catch (error) {
+      const message = friendlyAuthError(error);
+      setOtpError(message);
+      toast(message);
+    } finally {
+      button.disabled = false;
+    }
+  });
+  $("#resendOtp").addEventListener("click", async () => {
+    if (!otpEmail || otpCooldownSeconds() > 0) return;
+    const button = $("#resendOtp");
+    button.disabled = true;
+    setOtpError();
+    try {
+      await cloud.sendOtp(otpEmail);
+      showOtpStep(otpEmail, true);
+      toast("새 인증번호를 보냈습니다.");
+    } catch (error) {
+      const message = friendlyAuthError(error);
+      setOtpError(message);
+      toast(message);
+    } finally {
+      renderOtpCooldown();
+    }
+  });
+  $("#changeOtpEmail").addEventListener("click", () => {
+    const previousEmail = otpEmail;
+    clearOtpStep();
+    $("#adminEmail").value = previousEmail;
+    $("#adminEmail").focus();
   });
   $("#adminSignOut").addEventListener("click", async () => {
     try {
