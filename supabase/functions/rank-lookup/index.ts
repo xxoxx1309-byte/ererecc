@@ -65,7 +65,7 @@ Deno.serve(async (request) => {
   try {
     const apiKey = Deno.env.get("ER_API_KEY");
     if (!apiKey) throw new Error("ER_API_KEY 비밀값이 설정되지 않았습니다.");
-    const { nickname, seasonId, teamMode } = await request.json();
+    const { nickname, seasonId, teamMode, includePeak = true } = await request.json();
     if (!nickname || !seasonId || !teamMode) throw new Error("닉네임, 시즌, 팀 모드가 필요합니다.");
 
     const userJson = await erFetch(`v1/user/nickname?query=${encodeURIComponent(String(nickname).trim())}`, apiKey);
@@ -80,10 +80,27 @@ Deno.serve(async (request) => {
     const stats = (statsJson.userStats || []).find((item: Record<string, unknown>) => Number(item.matchingTeamMode) === Number(teamMode))
       || statsJson.userStats?.[0]
       || {};
+    let peak = rankJson.userRank || {};
+    let peakSeasonId = Number(seasonId);
+    if (includePeak) {
+      const seasonJson = await erFetch("v2/data/Season", apiKey);
+      const rankedSeasons = (seasonJson.data || [])
+        .filter((season: Record<string, unknown>) => !/pre/i.test(String(season.seasonName || "")) && Number(season.seasonID) <= Number(seasonId))
+        .sort((a: Record<string, unknown>, b: Record<string, unknown>) => Number(b.seasonID) - Number(a.seasonID))
+        .slice(0, 5);
+      for (const season of rankedSeasons) {
+        const historical = await erFetch(`v1/rank/uid/${userId}/${Number(season.seasonID)}/${Number(teamMode)}`, apiKey, true);
+        if (Number(historical.userRank?.mmr || 0) > Number(peak.mmr || 0)) {
+          peak = historical.userRank;
+          peakSeasonId = Number(season.seasonID);
+        }
+      }
+    }
 
     return new Response(JSON.stringify({
       user: { userId: user.userId, nickname: String(nickname).trim() },
       rank: rankJson.userRank || {},
+      peak: { ...peak, seasonId: peakSeasonId },
       stats
     }), { headers });
   } catch (error) {

@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#fffdf8">
   <title>이터널 리턴 내전 계산기</title>
   <link rel="icon" type="image/svg+xml" href="./favicon.svg">
-  <link rel="stylesheet" href="./style.css?v=20260620-2">
+  <link rel="stylesheet" href="./style.css?v=20260620-4">
 </head>
 <body>
   <header class="topbar">
@@ -299,7 +299,13 @@
         <label>팀당 인원
           <input id="teamSize" type="number" min="1" max="4" value="3">
         </label>
-        <p>MMR 순으로 정렬한 뒤 스네이크 방식으로 균형을 맞춥니다.</p>
+        <label>편성 MMR 기준
+          <select id="mmrBasis">
+            <option value="current">현재 시즌</option>
+            <option value="peak">최근 5시즌 최고</option>
+          </select>
+        </label>
+        <p>선택한 MMR 기준으로 정렬한 뒤 스네이크 방식으로 균형을 맞춥니다.</p>
       </div>
       <div class="draft-helper">
         <div class="draft-head">
@@ -407,6 +413,37 @@
       </div>
     </section>
   </main>
+
+  <dialog id="applicantEditDialog">
+    <form id="applicantEditForm" class="settings-dialog">
+      <div class="dialog-head">
+        <div>
+          <p class="eyebrow">MEMBER EDIT</p>
+          <h2>참가자 정보 수정</h2>
+        </div>
+        <button class="icon-button" id="cancelApplicantEdit" type="button" title="닫기" aria-label="닫기">
+          <i data-lucide="x"></i>
+        </button>
+      </div>
+      <div class="settings-grid applicant-edit-grid">
+        <label>인게임 닉네임<input id="editNickname" required></label>
+        <label>디스코드 닉네임<input id="editDiscordName"></label>
+        <label>현재 시즌 MMR<input id="editMmr" type="number" min="0" required></label>
+        <label>최근 5시즌 최고 MMR<input id="editPeakMmr" type="number" min="0"></label>
+        <label>랭킹<input id="editRank" type="number" min="0"></label>
+        <label>전체 경기<input id="editTotalGames" type="number" min="0"></label>
+        <label>승리<input id="editTotalWins" type="number" min="0"></label>
+        <label>1순위 역할<select id="editRole1"></select></label>
+        <label>2순위 역할<select id="editRole2"></select></label>
+        <label>3순위 역할<select id="editRole3"></select></label>
+      </div>
+      <label>모스트 실험체 (쉼표로 구분)
+        <input id="editMost" placeholder="예: 수아, 레니, 일레븐">
+      </label>
+      <label>메모<input id="editMemo"></label>
+      <button class="primary" type="submit"><i data-lucide="save"></i> 수정 저장</button>
+    </form>
+  </dialog>
 
   <dialog id="settingsDialog">
     <form method="dialog" class="settings-dialog">
@@ -537,8 +574,8 @@
 
   <script src="./config.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="./cloud.js?v=20260620-2"></script>
+  <script src="./cloud.js?v=20260620-4"></script>
   <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
-  <script src="./app.js?v=20260620-2"></script>
+  <script src="./app.js?v=20260620-4"></script>
 </body>
 </html>
