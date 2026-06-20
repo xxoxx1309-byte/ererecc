@@ -849,7 +849,7 @@ button:disabled { cursor: not-allowed; opacity: .55; transform: none; }
 
 .teams-board {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
 }
 
@@ -1002,6 +1002,7 @@ legend { padding: 0 7px; font-size: 15px; }
   .manual-captain-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .tail-rule-board, .weapon-assignment-board { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .captain-grid, .replay-grid { grid-template-columns: repeat(2, 1fr); }
+  .teams-board { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media (max-width: 620px) {
@@ -1020,6 +1021,7 @@ legend { padding: 0 7px; font-size: 15px; }
   .weapon-rule-head { align-items: stretch; flex-direction: column; }
   .tail-rule-board, .weapon-assignment-board, .house-rule-options { grid-template-columns: 1fr; }
   .manual-captain-grid { grid-template-columns: 1fr; }
+  .teams-board { grid-template-columns: 1fr; }
   .tail-rule-card { grid-template-columns: minmax(0, 1fr) 18px minmax(0, 1fr); }
   .tail-rule-card small { grid-column: 1 / -1; justify-self: start; }
   .weapon-group-row { grid-template-columns: 34px minmax(0, 1fr); }
