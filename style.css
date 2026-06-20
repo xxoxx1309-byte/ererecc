@@ -889,6 +889,29 @@ button:disabled { cursor: not-allowed; opacity: .55; transform: none; }
 }
 .team-card.drag-over { outline: 3px dashed var(--rose); outline-offset: 3px; }
 
+.unassigned-team-pool {
+  grid-column: 1 / -1;
+  padding: 12px;
+  background: var(--surface-2);
+  border: 2px dashed var(--line);
+  border-radius: 7px;
+}
+.unassigned-team-pool.drag-over { border-color: var(--rose); background: var(--rose-soft); }
+.unassigned-head { display: flex; justify-content: space-between; margin-bottom: 8px; }
+.unassigned-list { display: flex; gap: 7px; overflow-x: auto; padding-bottom: 3px; }
+.unassigned-player {
+  flex: 0 0 180px;
+  display: grid;
+  gap: 3px;
+  padding: 8px 10px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  cursor: grab;
+}
+.unassigned-player.dragging { opacity: .35; }
+.unassigned-player small { color: var(--subtle); font-size: 11px; }
+
 .role-tag {
   display: inline-block;
   margin-left: 5px;
