@@ -177,7 +177,9 @@
       async eventBySlug(slug) {
         const { data, error } = await client.rpc("get_public_event", { event_slug: slug });
         if (error) throw error;
-        return data?.[0] || null;
+        const event = data?.[0] || null;
+        if (event) event.public_applicants = (event.public_applicants || []).map(applicantFromRow);
+        return event;
       },
 
       async eventById(eventId) {

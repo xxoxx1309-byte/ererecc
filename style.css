@@ -177,6 +177,20 @@ button svg, .icon-button svg { width: 18px; height: 18px; stroke-width: 2; }
 body[data-view="apply"] .admin-only { display: none; }
 body.cloud-readonly-admin .top-actions,
 body.cloud-readonly-admin main > [data-view-panel="admin"]:not(#cloudAdminPanel) { display: none !important; }
+body.cloud-viewonly-admin main > [data-view-panel="admin"]:not(#cloudAdminPanel) { position: relative; }
+body.cloud-viewonly-admin main > [data-view-panel="admin"]:not(#cloudAdminPanel)::after {
+  content: "읽기 전용 · 최종 수정은 메인 관리자만 가능합니다";
+  position: absolute;
+  z-index: 3;
+  top: 10px;
+  right: 14px;
+  padding: 5px 8px;
+  color: #7a4a00;
+  background: #fff0bd;
+  border-radius: 5px;
+  font-size: 11px;
+  font-weight: 800;
+}
 
 .top-actions, .actions {
   display: flex;
@@ -969,6 +983,18 @@ th { color: #46413d; background: var(--surface-2); font-family: var(--heading); 
 .roster-actions { display: flex; gap: 5px; }
 .applicant-edit-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 
+.public-roster-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+}
+.public-roster-card { padding: 11px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 7px; }
+.public-roster-card > div { display: flex; justify-content: space-between; gap: 8px; }
+.public-roster-card span { color: var(--rose); font-size: 11px; font-weight: 800; }
+.public-roster-card p { margin: 6px 0 3px; font-size: 12px; }
+.public-roster-card small { color: var(--subtle); font-size: 11px; }
+
 dialog {
   width: min(820px, calc(100% - 28px));
   max-height: calc(100vh - 40px);
@@ -1028,6 +1054,7 @@ legend { padding: 0 7px; font-size: 15px; }
   .tail-rule-board, .weapon-assignment-board { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .captain-grid, .replay-grid { grid-template-columns: repeat(2, 1fr); }
   .teams-board { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .public-roster-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media (max-width: 620px) {
@@ -1047,6 +1074,7 @@ legend { padding: 0 7px; font-size: 15px; }
   .tail-rule-board, .weapon-assignment-board, .house-rule-options { grid-template-columns: 1fr; }
   .manual-captain-grid { grid-template-columns: 1fr; }
   .teams-board { grid-template-columns: 1fr; }
+  .public-roster-grid { grid-template-columns: 1fr; }
   .tail-rule-card { grid-template-columns: minmax(0, 1fr) 18px minmax(0, 1fr); }
   .tail-rule-card small { grid-column: 1 / -1; justify-self: start; }
   .weapon-group-row { grid-template-columns: 34px minmax(0, 1fr); }

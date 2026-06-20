@@ -136,6 +136,8 @@ const DEFAULT_SCORE_RULE = {
 const OTP_COOLDOWN_MS = 60_000;
 const OTP_EMAIL_KEY = "er-admin-otp-email";
 const OTP_SENT_AT_KEY = "er-admin-otp-sent-at";
+const TAIL_CHASE_EVENT_SLUG = "match-20260620-099ffa";
+const TAIL_CHASE_EDITOR_EMAIL = "enlilblei@gmail.com";
 
 let state = loadState();
 let selectedRoles = [];
@@ -337,8 +339,14 @@ function isSiteOwner() {
   return cloudOperator?.is_owner === true;
 }
 
-function canManageCloudEvent() {
+function canViewCloudEvent() {
   return Boolean(cloudEvent && cloudEvents.some((event) => event.id === cloudEvent.id));
+}
+
+function canManageCloudEvent() {
+  if (!canViewCloudEvent()) return false;
+  if (cloudEvent.slug !== TAIL_CHASE_EVENT_SLUG) return true;
+  return String(cloudSession?.user?.email || "").trim().toLowerCase() === TAIL_CHASE_EDITOR_EMAIL;
 }
 
 function cloudApplyUrl(event = cloudEvent) {
@@ -465,7 +473,12 @@ function renderOperatorList() {
 function renderCloudControls() {
   const configured = Boolean(cloud?.configured);
   const awaitingOtp = configured && !cloudSession && Boolean(otpEmail);
+  const eventReadOnly = Boolean(configured && cloudOperator && cloudEvent && !canManageCloudEvent());
   document.body.classList.toggle("cloud-readonly-admin", configured && !cloudOperator);
+  document.body.classList.toggle("cloud-viewonly-admin", eventReadOnly);
+  document.querySelectorAll('main > [data-view-panel="admin"]:not(#cloudAdminPanel)').forEach((panel) => {
+    panel.toggleAttribute("inert", eventReadOnly);
+  });
   $("#localApiSettings").hidden = configured;
   $("#cloudUnavailable").hidden = configured;
   $("#adminLoginForm").hidden = !configured || Boolean(cloudSession) || awaitingOtp;
@@ -560,7 +573,7 @@ function applyCloudState(event, applicants = []) {
 }
 
 async function reloadCloudApplicants() {
-  if (!canManageCloudEvent()) return;
+  if (!canViewCloudEvent()) return;
   state.applicants = await cloud.applicants(cloudEvent.id);
   render();
 }
@@ -568,7 +581,7 @@ async function reloadCloudApplicants() {
 function subscribeCloudApplicants() {
   if (cloudApplicantUnsubscribe) cloudApplicantUnsubscribe();
   cloudApplicantUnsubscribe = null;
-  if (!canManageCloudEvent()) return;
+  if (!canViewCloudEvent()) return;
   cloudApplicantUnsubscribe = cloud.subscribeApplicants(cloudEvent.id, () => {
     clearTimeout(subscribeCloudApplicants.timer);
     subscribeCloudApplicants.timer = setTimeout(() => reloadCloudApplicants().catch((error) => toast(error.message)), 180);
@@ -606,9 +619,11 @@ async function loadPublicCloudEvent(slug) {
     renderCloudControls();
     return toast("해당 신청 내전을 찾지 못했습니다.");
   }
-  const applicants = cloudEvents.some((item) => item.id === event.id) ? await cloud.applicants(event.id) : [];
+  const applicants = cloudEvents.some((item) => item.id === event.id)
+    ? await cloud.applicants(event.id)
+    : (event.public_applicants || []);
   applyCloudState(event, applicants);
-  if (canManageCloudEvent()) subscribeCloudApplicants();
+  if (canViewCloudEvent()) subscribeCloudApplicants();
 }
 
 async function refreshCloudEvents(preferredId = "", openSelected = true) {
@@ -1436,6 +1451,23 @@ function renderApplicants() {
     </tr>`).join("") || `<tr><td colspan="9">등록된 참가자가 없습니다.</td></tr>`;
 }
 
+function renderPublicRoster() {
+  const board = $("#publicRosterBoard");
+  if (!board) return;
+  const teamByPlayer = new Map();
+  state.teams.forEach((team) => team.members.forEach((playerId) => teamByPlayer.set(playerId, team.name)));
+  const players = state.applicants.slice().sort((a, b) => {
+    const teamCompare = String(teamByPlayer.get(a.id) || "미배정").localeCompare(String(teamByPlayer.get(b.id) || "미배정"), "ko");
+    return teamCompare || a.nickname.localeCompare(b.nickname, "ko");
+  });
+  board.innerHTML = players.map((player) => `
+    <article class="public-roster-card">
+      <div><strong>${escapeHtml(player.nickname)}</strong><span>${escapeHtml(teamByPlayer.get(player.id) || "미배정")}</span></div>
+      <p>${state.settings.mmrBasis === "peak" ? "최고" : "현재"} MMR ${formatNumber(applicantMmr(player))} · ${escapeHtml(player.roles?.[0] || "역할 미지정")}</p>
+      <small>${escapeHtml((player.mostStats || []).map(characterNameForStat).join(" / ") || player.most?.join(" / ") || "모스트 기록 없음")}</small>
+    </article>`).join("") || `<p class="note">아직 등록된 참가자가 없습니다.</p>`;
+}
+
 function openApplicantEditor(applicantId) {
   if (cloud?.configured && !canManageCloudEvent()) return toast("이 내전의 운영자만 수정할 수 있습니다.");
   const player = getApplicant(applicantId);
@@ -1569,6 +1601,7 @@ function render() {
   renderTeams();
   renderScores();
   renderApplicants();
+  renderPublicRoster();
   refreshIcons();
 }
 
