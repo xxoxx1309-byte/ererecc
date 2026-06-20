@@ -1,5 +1,5 @@
 const API_BASE = "https://open-api.bser.io";
-const API_INTERVAL_MS = 250;
+const API_INTERVAL_MS = 350;
 const responseCache = new Map<string, { expiresAt: number; data: Record<string, unknown> }>();
 let apiQueue = Promise.resolve();
 let nextApiRequestAt = 0;
@@ -33,15 +33,15 @@ async function erFetch(path: string, apiKey: string, optional = false) {
   const cached = responseCache.get(normalizedPath);
   if (cached && cached.expiresAt > Date.now()) return cached.data;
 
-  for (let attempt = 0; attempt < 4; attempt += 1) {
+  for (let attempt = 0; attempt < 6; attempt += 1) {
     await waitForApiSlot();
     const response = await fetch(`${API_BASE}/${normalizedPath}`, {
       headers: { accept: "application/json", "x-api-key": apiKey }
     });
     const json = await response.json().catch(() => ({}));
-    if (response.status === 429 && attempt < 3) {
+    if (response.status === 429 && attempt < 5) {
       const retryAfter = Number(response.headers.get("retry-after") || 0) * 1000;
-      await delay(Math.max(retryAfter, 600 * (attempt + 1)));
+      await delay(Math.max(retryAfter, 1200 * (attempt + 1)));
       continue;
     }
     if (optional && (response.status === 404 || Number(json.code) === 404)) return {};

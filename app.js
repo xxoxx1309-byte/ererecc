@@ -869,12 +869,16 @@ function toggleRole(role) {
 
 async function lookupRank() {
   const nickname = $("#nickname").value.trim();
-  if (!nickname) return toast("닉네임을 입력해 주세요.");
+  if (!nickname) {
+    toast("닉네임을 입력해 주세요.");
+    return null;
+  }
   const useCloudLookup = Boolean(cloud?.configured && cloudEvent);
   if (!useCloudLookup && !state.settings.apiKey) {
     rankCache = null;
     updateRankPreview({ message: "API 키가 없어 랭크 조회를 건너뜁니다. 닉네임과 역할군만으로 바로 신청할 수 있습니다." }, "manual");
-    return toast("API 키 없이 수동 신청으로 진행할 수 있습니다.");
+    toast("API 키 없이 수동 신청으로 진행할 수 있습니다.");
+    return null;
   }
 
   updateRankPreview(null, "loading");
@@ -928,9 +932,11 @@ async function lookupRank() {
     $("#manualMmr").value = rankCache.mmr || "";
     $("#manualRank").value = rankCache.rank || "";
     updateRankPreview(rankCache);
+    return rankCache;
   } catch (error) {
     rankCache = null;
     updateRankPreview({ message: error.message }, "error");
+    return null;
   }
 }
 
@@ -981,6 +987,15 @@ async function submitApplicant(event) {
   event.preventDefault();
   const nickname = $("#nickname").value.trim();
   if (!nickname || selectedRoles.length !== 3) return toast("닉네임과 역할군 3개를 모두 입력해 주세요.");
+  const canLookup = Boolean((cloud?.configured && cloudEvent) || state.settings.apiKey);
+  const cachedNickname = String(rankCache?.nickname || "").trim().toLowerCase();
+  if (canLookup && cachedNickname !== nickname.toLowerCase()) {
+    const submitButton = $("#submitApplicant");
+    submitButton.disabled = true;
+    const lookup = await lookupRank();
+    submitButton.disabled = false;
+    if (!lookup) return toast("전적 조회에 실패해 신청을 멈췄습니다. 잠시 후 다시 시도해 주세요.");
+  }
   const applicant = {
     id: crypto.randomUUID(),
     nickname,
