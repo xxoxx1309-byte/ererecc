@@ -355,6 +355,7 @@ function canViewCloudEvent() {
 
 function canManageCloudEvent() {
   if (!canViewCloudEvent()) return false;
+  if (isSiteOwner()) return true;
   if (cloudEvent.slug !== TAIL_CHASE_EVENT_SLUG) return true;
   return String(cloudSession?.user?.email || "").trim().toLowerCase() === TAIL_CHASE_EDITOR_EMAIL;
 }
