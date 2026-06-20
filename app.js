@@ -1105,6 +1105,23 @@ function teamTotal(teamId) {
   return state.scores.reduce((sum, match) => sum + scoreFor(match[teamId]), 0);
 }
 
+function teamMemberChangeOptions(sourceTeam, playerId) {
+  const teamSize = Number(state.settings.teamSize || 3);
+  return state.teams.filter((team) => team.id !== sourceTeam.id).map((team) => {
+    const moveOption = team.members.length < teamSize
+      ? `<option value="move|${team.id}">${escapeHtml(team.name)} 빈자리로 이동</option>`
+      : "";
+    const swapOptions = team.members.map((memberId) => {
+      if (state.captains[team.id] === memberId) return "";
+      const member = getApplicant(memberId);
+      if (!member) return "";
+      const name = member.discordName || member.nickname;
+      return `<option value="swap|${team.id}|${memberId}">${escapeHtml(team.name)} · ${escapeHtml(name)}와 교체</option>`;
+    }).join("");
+    return `${moveOption}${swapOptions}`;
+  }).join("");
+}
+
 function renderTeams() {
   $("#teamCount").textContent = state.teams.length;
   renderDraftBoard();
@@ -1118,7 +1135,14 @@ function renderTeams() {
       const captain = state.captains[team.id] === player.id;
       const name = player.discordName ? `${player.discordName} (${player.nickname})` : player.nickname;
       const roleOrder = (player.roles || []).map((role, roleIndex) => `${roleIndex + 1}. ${role}`).join(" / ");
-      return `<li>${captain ? "팀장 · " : ""}${escapeHtml(name)}<span class="role-tag">${escapeHtml(player.roles?.[0] || "-")}</span><br><small>MMR ${formatNumber(player.mmr)} · ${escapeHtml(roleOrder || "역할군 미지정")}</small></li>`;
+      const changeOptions = captain ? "" : teamMemberChangeOptions(team, player.id);
+      return `<li>
+        <div>${captain ? "팀장 · " : ""}${escapeHtml(name)}<span class="role-tag">${escapeHtml(player.roles?.[0] || "-")}</span></div>
+        <small>MMR ${formatNumber(player.mmr)} · ${escapeHtml(roleOrder || "역할군 미지정")}</small>
+        ${changeOptions ? `<select class="team-member-change" data-change-team-member="${team.id}|${player.id}" aria-label="${escapeHtml(name)} 팀 변경">
+          <option value="">교체·이동…</option>${changeOptions}
+        </select>` : ""}
+      </li>`;
     }).join("");
     return `<article class="team-card"><header><span>${team.name}</span><span>합계 ${formatNumber(totalMmr)}</span></header><ol>${members}</ol></article>`;
   }).join("") || `<p class="note">참가자를 등록한 뒤 자동 편성을 실행하세요.</p>`;
@@ -1831,6 +1855,7 @@ function bindEvents() {
   $("#banBoard").addEventListener("change", updateBan);
   $("#replayBoard").addEventListener("change", updateReplay);
   $("#captainBoard").addEventListener("change", updateCaptain);
+  $("#teamsBoard").addEventListener("change", updateTeamMember);
   $("#exportJson").addEventListener("click", exportJson);
   $("#exportCsv").addEventListener("click", exportCsv);
   $("#importJson").addEventListener("change", importJson);
@@ -1865,6 +1890,36 @@ function updateCaptain(event) {
   if (event.target.value) state.captains[teamId] = event.target.value;
   else delete state.captains[teamId];
   saveState();
+}
+
+function updateTeamMember(event) {
+  const sourceToken = event.target.dataset.changeTeamMember;
+  if (!sourceToken || !event.target.value) return;
+  const [sourceTeamId, playerId] = sourceToken.split("|");
+  const [action, targetTeamId, targetPlayerId] = event.target.value.split("|");
+  const sourceTeam = state.teams.find((team) => team.id === sourceTeamId);
+  const targetTeam = state.teams.find((team) => team.id === targetTeamId);
+  if (!sourceTeam || !targetTeam || state.captains[sourceTeam.id] === playerId) return render();
+  const sourceIndex = sourceTeam.members.indexOf(playerId);
+  if (sourceIndex < 0) return render();
+
+  if (action === "move" && targetTeam.members.length < Number(state.settings.teamSize || 3)) {
+    sourceTeam.members.splice(sourceIndex, 1);
+    targetTeam.members.push(playerId);
+    saveState();
+    return toast(`${sourceTeam.name}에서 ${targetTeam.name}으로 이동했습니다.`);
+  }
+
+  if (action === "swap" && targetPlayerId && state.captains[targetTeam.id] !== targetPlayerId) {
+    const targetIndex = targetTeam.members.indexOf(targetPlayerId);
+    if (targetIndex < 0) return render();
+    sourceTeam.members[sourceIndex] = targetPlayerId;
+    targetTeam.members[targetIndex] = playerId;
+    saveState();
+    toast(`${sourceTeam.name}과 ${targetTeam.name}의 팀원을 교체했습니다.`);
+    return;
+  }
+  render();
 }
 
 function toast(message) {
