@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#fffdf8">
   <title>이터널 리턴 내전 계산기</title>
   <link rel="icon" type="image/svg+xml" href="./favicon.svg">
-  <link rel="stylesheet" href="./style.css?v=20260620-6">
+  <link rel="stylesheet" href="./style.css?v=20260620-7">
 </head>
 <body>
   <header class="topbar">
@@ -180,6 +180,14 @@
             <button class="secondary" id="copyApplyLink" type="button" title="신청 링크 복사">
               <i data-lucide="copy"></i> 복사
             </button>
+          </div>
+          <div class="cloud-backup-row">
+            <button class="secondary" id="createCloudBackup" type="button"><i data-lucide="archive"></i> 서버 백업 생성</button>
+            <label>내전 백업
+              <select id="cloudBackupSelect"><option value="">백업 없음</option></select>
+            </label>
+            <button class="secondary" id="restoreCloudBackup" type="button"><i data-lucide="history"></i> 복원</button>
+            <button class="danger" id="deleteCloudBackup" type="button"><i data-lucide="trash-2"></i> 삭제</button>
           </div>
         </div>
         </div>
@@ -377,10 +385,15 @@
           <p class="section-number">03</p>
           <h2>경기 기록</h2>
         </div>
-        <button class="secondary" id="exportCsv" type="button">
-          <i data-lucide="file-spreadsheet"></i> CSV
-        </button>
+        <div class="actions">
+          <label class="button-link primary compact" title="게임 결과 CSV 자동 반영">
+            <i data-lucide="file-up"></i> 결과 CSV 불러오기
+            <input id="importGameResult" type="file" accept=".csv,text/csv" hidden>
+          </label>
+          <button class="secondary" id="exportCsv" type="button"><i data-lucide="file-spreadsheet"></i> CSV 내보내기</button>
+        </div>
       </div>
+      <div id="gameResultImportStatus" class="import-status" hidden></div>
       <div id="replayBoard" class="replay-board"></div>
       <div id="scoreSummary" class="score-summary"></div>
       <div id="scoreBoard" class="score-board"></div>
@@ -589,8 +602,8 @@
 
   <script src="./config.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="./cloud.js?v=20260620-6"></script>
+  <script src="./cloud.js?v=20260620-7"></script>
   <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
-  <script src="./app.js?v=20260620-6"></script>
+  <script src="./app.js?v=20260620-7"></script>
 </body>
 </html>

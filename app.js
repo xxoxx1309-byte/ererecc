@@ -159,6 +159,8 @@ let cloudEvents = [];
 let cloudOperator = null;
 let cloudOperators = [];
 let cloudApplicantUnsubscribe = null;
+let cloudEventUnsubscribe = null;
+let cloudBackups = [];
 let cloudSaveTimer = null;
 let cloudLoading = false;
 let cloudCreateOpen = false;
@@ -205,7 +207,9 @@ function defaultState() {
       picked: []
     },
     weaponAssignments: {},
+    roomCodes: ["", "", "", ""],
     replayCodes: ["", "", "", ""],
+    matchRecords: Array.from({ length: 4 }, () => ({})),
     scores: Array.from({ length: 4 }, () => ({})),
     updatedAt: null
   };
@@ -250,7 +254,9 @@ function normalizeState(saved, isLegacy = false) {
     picked: Array.isArray(saved.draft?.picked) ? saved.draft.picked : []
   };
   normalized.weaponAssignments = saved.weaponAssignments || {};
+  normalized.roomCodes = Array.isArray(saved.roomCodes) ? saved.roomCodes : [];
   normalized.replayCodes = Array.isArray(saved.replayCodes) ? saved.replayCodes : [];
+  normalized.matchRecords = Array.isArray(saved.matchRecords) ? saved.matchRecords : [];
   normalized.scores = Array.isArray(saved.scores) ? saved.scores : [];
   sanitizeStateRelations(normalized);
   syncMatchArrays(normalized);
@@ -308,6 +314,10 @@ function syncMatchArrays(target = state) {
   target.settings.matchCount = count;
   while (target.replayCodes.length < count) target.replayCodes.push("");
   target.replayCodes.length = count;
+  while (target.roomCodes.length < count) target.roomCodes.push("");
+  target.roomCodes.length = count;
+  while (target.matchRecords.length < count) target.matchRecords.push({});
+  target.matchRecords.length = count;
   while (target.scores.length < count) target.scores.push({});
   target.scores.length = count;
 }
@@ -470,6 +480,19 @@ function renderOperatorList() {
   `).join("");
 }
 
+function renderBackupControls() {
+  const select = $("#cloudBackupSelect");
+  if (!select) return;
+  select.innerHTML = cloudBackups.length
+    ? cloudBackups.map((backup) => `<option value="${backup.id}">${escapeHtml(backup.label)} · ${new Date(backup.created_at).toLocaleString("ko-KR")}</option>`).join("")
+    : `<option value="">백업 없음</option>`;
+  const disabled = !cloudBackups.length || !canManageCloudEvent();
+  select.disabled = !cloudBackups.length;
+  $("#restoreCloudBackup").disabled = disabled;
+  $("#deleteCloudBackup").disabled = disabled;
+  $("#createCloudBackup").disabled = !canManageCloudEvent();
+}
+
 function renderCloudControls() {
   const configured = Boolean(cloud?.configured);
   const awaitingOtp = configured && !cloudSession && Boolean(otpEmail);
@@ -533,6 +556,7 @@ function renderCloudControls() {
     $("#cloudApplyLink").value = applyUrl;
     $("#openApplyLink").href = applyUrl;
   }
+  renderBackupControls();
   updateApplicationAvailability();
   refreshIcons();
 }
@@ -578,6 +602,28 @@ async function reloadCloudApplicants() {
   render();
 }
 
+async function reloadCloudEventState() {
+  if (!cloudEvent) return;
+  if (cloudSession && canViewCloudEvent()) {
+    const [event, applicants] = await Promise.all([cloud.eventById(cloudEvent.id), cloud.applicants(cloudEvent.id)]);
+    applyCloudState(event, applicants);
+  } else {
+    const event = await cloud.eventBySlug(cloudEvent.slug);
+    if (event) applyCloudState(event, event.public_applicants || []);
+  }
+}
+
+function subscribeCloudEvent() {
+  if (cloudEventUnsubscribe) cloudEventUnsubscribe();
+  cloudEventUnsubscribe = null;
+  if (!cloudEvent?.id) return;
+  const subscribe = cloudSession && canViewCloudEvent() ? cloud.subscribeEvent : cloud.subscribePublicEvent;
+  cloudEventUnsubscribe = subscribe(cloudEvent.id, () => {
+    clearTimeout(subscribeCloudEvent.timer);
+    subscribeCloudEvent.timer = setTimeout(() => reloadCloudEventState().catch((error) => toast(error.message)), 250);
+  });
+}
+
 function subscribeCloudApplicants() {
   if (cloudApplicantUnsubscribe) cloudApplicantUnsubscribe();
   cloudApplicantUnsubscribe = null;
@@ -596,6 +642,9 @@ async function loadAdminCloudEvent(eventId) {
     const applicants = await cloud.applicants(event.id);
     applyCloudState(event, applicants);
     subscribeCloudApplicants();
+    subscribeCloudEvent();
+    cloudBackups = await cloud.listBackups(event.id);
+    renderBackupControls();
     const url = new URL(location.href);
     url.searchParams.set("event", event.slug);
     url.hash = "admin";
@@ -624,6 +673,7 @@ async function loadPublicCloudEvent(slug) {
     : (event.public_applicants || []);
   applyCloudState(event, applicants);
   if (canViewCloudEvent()) subscribeCloudApplicants();
+  subscribeCloudEvent();
 }
 
 async function refreshCloudEvents(preferredId = "", openSelected = true) {
@@ -652,6 +702,9 @@ async function handleCloudSession(session, preserveApplyView = false) {
     cloudOperators = [];
     if (cloudApplicantUnsubscribe) cloudApplicantUnsubscribe();
     cloudApplicantUnsubscribe = null;
+    if (cloudEventUnsubscribe) cloudEventUnsubscribe();
+    cloudEventUnsubscribe = null;
+    cloudBackups = [];
     renderCloudControls();
     return;
   }
@@ -692,15 +745,18 @@ function scheduleCloudSave() {
   if (cloudLoading || !cloud?.configured || !canManageCloudEvent()) return;
   clearTimeout(cloudSaveTimer);
   cloudSaveTimer = setTimeout(async () => {
+    cloudSaveTimer = null;
     try {
       setCloudStatus("저장 중");
-      cloudEvent = await cloud.updateEvent(cloudEvent.id, state);
+      const expectedUpdatedAt = cloudEvent.updated_at || "";
+      cloudEvent = await cloud.updateEvent(cloudEvent.id, state, {}, expectedUpdatedAt);
       setCloudStatus("실시간 저장됨", "ok");
       const index = cloudEvents.findIndex((event) => event.id === cloudEvent.id);
       if (index >= 0) cloudEvents[index] = cloudEvent;
     } catch (error) {
       setCloudStatus("저장 실패", "error");
       toast(error.message);
+      if (error.code === "EVENT_CONFLICT") await reloadCloudEventState();
     }
   }, 500);
 }
@@ -1284,6 +1340,24 @@ function renderDraftBoard() {
     board.innerHTML = `<p class="note">참가자를 등록하면 팀장 후보와 남은 인원이 표시됩니다.</p>`;
     return;
   }
+  if (state.teams.length && Object.keys(state.captains).length) {
+    const assignedIds = new Set(state.teams.flatMap((team) => team.members));
+    const remaining = sortedApplicantsByMmr().filter((player) => !assignedIds.has(player.id));
+    board.innerHTML = `<div class="draft-team-status">
+      ${state.teams.map((team) => {
+        const captain = getApplicant(state.captains[team.id]);
+        const picked = team.members.filter((id) => id !== captain?.id).map(getApplicant).filter(Boolean);
+        return `<article><h3>${escapeHtml(team.name)} <span>${picked.length}/${Math.max(0, Number(state.settings.teamSize || 3) - 1)}픽</span></h3>
+          <strong>팀장 · ${escapeHtml(captain?.discordName || captain?.nickname || "미정")}</strong>
+          <div>${picked.map((player, index) => `<p>${index + 1}픽 · ${escapeHtml(player.discordName || player.nickname)} <small>MMR ${formatNumber(applicantMmr(player))}</small></p>`).join("") || `<p class="empty">아직 뽑은 팀원이 없습니다.</p>`}</div>
+        </article>`;
+      }).join("")}
+      <article class="remaining"><h3>남은 인원 <span>${remaining.length}</span></h3>
+        <div>${remaining.map((player) => `<p>${escapeHtml(player.discordName || player.nickname)} <small>MMR ${formatNumber(applicantMmr(player))}</small></p>`).join("") || `<p class="empty">남은 인원이 없습니다.</p>`}</div>
+      </article>
+    </div>`;
+    return;
+  }
   const captainIds = new Set(draftCaptainIds());
   const pickedIds = new Set(state.draft.picked || []);
   const captains = sortedApplicantsByMmr(state.draft?.captainMode === "low").filter((player) => captainIds.has(player.id));
@@ -1351,9 +1425,17 @@ function renderScores() {
 
 function renderReplayCodes() {
   $("#replayBoard").innerHTML = `
-    <p class="field-title">리플레이 코드</p>
-    <div class="replay-grid">
-      ${state.replayCodes.map((code, index) => `<label>${index + 1}경기<input data-replay="${index}" value="${escapeHtml(code)}" placeholder="코드 입력"></label>`).join("")}
+    <div class="match-record-head"><div><p class="field-title">방·리플레이 기록</p><p class="field-help">경기별 코드를 한곳에서 관리하고 결과 CSV의 게임 ID를 함께 보관합니다.</p></div></div>
+    <div class="match-record-grid">
+      ${state.replayCodes.map((code, index) => {
+        const record = state.matchRecords[index] || {};
+        return `<article class="match-record-card">
+          <header><strong>${index + 1}경기</strong><span>${record.gameId ? `게임 ${escapeHtml(String(record.gameId))}` : "결과 대기"}</span></header>
+          <label>방 코드<input data-room="${index}" value="${escapeHtml(state.roomCodes[index] || "")}" placeholder="방 코드"></label>
+          <label>리플레이 코드<input data-replay="${index}" value="${escapeHtml(code)}" placeholder="리플레이 코드"></label>
+          <small>${record.sourceFile ? `${escapeHtml(record.sourceFile)} · ${new Date(record.importedAt).toLocaleString("ko-KR")}` : "CSV 미등록"}</small>
+        </article>`;
+      }).join("")}
     </div>`;
 }
 
@@ -1618,14 +1700,14 @@ function exportCsv() {
     ["weaponAssignments", Object.entries(state.weaponAssignments).map(([team, group]) => `${team}:${group}`).join(" / ")],
     ["placementPoints", currentScoreRule().placement.join("/")],
     [],
-    ["team", "captain", "members", "total", "match", "replayCode", "place", "day1Kills", "lateKills", "penaltyDeaths", "score", "bans"]
+    ["team", "captain", "members", "total", "match", "roomCode", "replayCode", "gameId", "place", "day1Kills", "lateKills", "penaltyDeaths", "score", "bans"]
   ];
   state.teams.forEach((team) => {
     const members = team.members.map((id) => getApplicant(id)?.nickname).filter(Boolean).join(" / ");
     const captain = getApplicant(state.captains[team.id])?.nickname || "";
     state.scores.forEach((match, index) => {
       const entry = match[team.id] || {};
-      rows.push([team.name, captain, members, teamTotal(team.id), index + 1, state.replayCodes[index] || "", entry.place || "", entry.day1Kills || 0, entry.lateKills || 0, entry.penaltyDeaths || 0, scoreFor(entry), entry.bans || ""]);
+      rows.push([team.name, captain, members, teamTotal(team.id), index + 1, state.roomCodes[index] || "", state.replayCodes[index] || "", state.matchRecords[index]?.gameId || "", entry.place || "", entry.day1Kills || 0, entry.lateKills || 0, entry.penaltyDeaths || 0, scoreFor(entry), entry.bans || ""]);
     });
   });
   const csv = rows.map((row) => row.map((cell) => `"${String(cell ?? "").replaceAll("\"", "\"\"")}"`).join(",")).join("\n");
@@ -1653,6 +1735,125 @@ async function importJson(event) {
     toast("올바른 백업 파일이 아닙니다.");
   }
   event.target.value = "";
+}
+
+function parseCsv(text) {
+  const rows = [];
+  let row = [];
+  let cell = "";
+  let quoted = false;
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index];
+    if (char === '"') {
+      if (quoted && text[index + 1] === '"') { cell += '"'; index += 1; }
+      else quoted = !quoted;
+    } else if (char === "," && !quoted) {
+      row.push(cell.trim()); cell = "";
+    } else if ((char === "\n" || char === "\r") && !quoted) {
+      if (char === "\r" && text[index + 1] === "\n") index += 1;
+      row.push(cell.trim()); cell = "";
+      if (row.some((value) => value !== "")) rows.push(row);
+      row = [];
+    } else cell += char;
+  }
+  if (cell || row.length) { row.push(cell.trim()); rows.push(row); }
+  return rows;
+}
+
+async function importGameResultCsv(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const status = $("#gameResultImportStatus");
+  try {
+    if (cloud?.configured && !canManageCloudEvent()) throw new Error("이 내전의 편집 권한이 필요합니다.");
+    const rows = parseCsv((await file.text()).replace(/^\uFEFF/, ""));
+    const headers = rows.shift().map((header) => header.trim().toLowerCase());
+    const required = ["rank", "team kill", "gameid", "teamname"];
+    if (required.some((header) => !headers.includes(header))) throw new Error("지원하지 않는 결과 CSV 형식입니다.");
+    const objects = rows.map((values) => Object.fromEntries(headers.map((header, index) => [header, values[index] ?? ""])));
+    const gameId = String(objects[0]?.gameid || "").trim();
+    if (!gameId) throw new Error("게임 ID가 없습니다.");
+    let matchIndex = state.matchRecords.findIndex((record) => String(record?.gameId || "") === gameId);
+    if (matchIndex < 0) matchIndex = state.matchRecords.findIndex((record) => !record?.gameId);
+    if (matchIndex < 0) {
+      if (state.settings.matchCount >= 12) throw new Error("경기는 최대 12개까지 기록할 수 있습니다.");
+      state.settings.matchCount += 1;
+      syncMatchArrays();
+      matchIndex = state.settings.matchCount - 1;
+      bindSettings();
+    }
+    const teams = new Map();
+    objects.forEach((record) => {
+      const teamName = String(record.teamname || "").trim();
+      if (!teams.has(teamName)) teams.set(teamName, record);
+    });
+    let applied = 0;
+    teams.forEach((record, csvTeamName) => {
+      const teamNumber = Number(csvTeamName.match(/\d+/)?.[0]);
+      const team = state.teams.find((item) => Number(item.name.match(/\d+/)?.[0]) === teamNumber);
+      if (!team) return;
+      state.scores[matchIndex][team.id] = {
+        ...(state.scores[matchIndex][team.id] || {}),
+        place: Number(record.rank || 0) || "",
+        day1Kills: 0,
+        lateKills: Number(record["team kill"] || 0),
+        penaltyDeaths: Number(state.scores[matchIndex][team.id]?.penaltyDeaths || 0),
+        bans: state.scores[matchIndex][team.id]?.bans || ""
+      };
+      applied += 1;
+    });
+    state.matchRecords[matchIndex] = { gameId, sourceFile: file.name, importedAt: new Date().toISOString(), teamCount: applied };
+    saveState();
+    status.hidden = false;
+    status.className = "import-status ok";
+    status.textContent = `${matchIndex + 1}경기 · 게임 ${gameId} · ${applied}개 팀의 등수와 팀킬을 자동 반영했습니다.`;
+    toast("게임 결과 CSV를 점수에 반영했습니다.");
+  } catch (error) {
+    status.hidden = false;
+    status.className = "import-status error";
+    status.textContent = error.message;
+  }
+  event.target.value = "";
+}
+
+async function createCloudBackup() {
+  if (!cloudEvent || !canManageCloudEvent()) return;
+  const now = new Date();
+  const label = `${cloudEvent.name} · ${now.toLocaleString("ko-KR")}`;
+  try {
+    const snapshot = JSON.parse(JSON.stringify(state));
+    delete snapshot.settings?.apiKey;
+    delete snapshot.settings?.apiBase;
+    const backup = await cloud.createBackup(cloudEvent.id, label, snapshot);
+    cloudBackups.unshift(backup);
+    renderBackupControls();
+    toast("현재 내전을 서버에 백업했습니다.");
+  } catch (error) { toast(error.message); }
+}
+
+async function restoreCloudBackup() {
+  const backup = cloudBackups.find((item) => item.id === $("#cloudBackupSelect").value);
+  if (!backup || !canManageCloudEvent() || !confirm(`'${backup.label}' 상태로 복원할까요? 현재 상태는 덮어씁니다.`)) return;
+  try {
+    cloudLoading = true;
+    const restored = normalizeState(backup.snapshot || {});
+    await cloud.replaceApplicants(cloudEvent.id, restored.applicants);
+    const event = await cloud.updateEvent(cloudEvent.id, restored);
+    applyCloudState(event, restored.applicants);
+    toast("내전 백업을 복원했습니다.");
+  } catch (error) { toast(error.message); }
+  finally { cloudLoading = false; }
+}
+
+async function deleteCloudBackup() {
+  const backup = cloudBackups.find((item) => item.id === $("#cloudBackupSelect").value);
+  if (!backup || !canManageCloudEvent() || !confirm("선택한 서버 백업을 삭제할까요?")) return;
+  try {
+    await cloud.deleteBackup(backup.id);
+    cloudBackups = cloudBackups.filter((item) => item.id !== backup.id);
+    renderBackupControls();
+    toast("백업을 삭제했습니다.");
+  } catch (error) { toast(error.message); }
 }
 
 function bindEvents() {
@@ -1984,15 +2185,20 @@ function bindEvents() {
   $("#scoreBoard").addEventListener("change", updateScore);
   $("#banBoard").addEventListener("change", updateBan);
   $("#replayBoard").addEventListener("change", updateReplay);
+  $("#replayBoard").addEventListener("change", updateRoom);
   $("#captainBoard").addEventListener("change", updateCaptain);
   $("#teamsBoard").addEventListener("dragstart", startTeamMemberDrag);
   $("#teamsBoard").addEventListener("dragover", handleTeamMemberDragOver);
   $("#teamsBoard").addEventListener("dragleave", clearTeamDropTarget);
   $("#teamsBoard").addEventListener("drop", dropTeamMember);
   $("#teamsBoard").addEventListener("dragend", clearTeamDragState);
+  $("#createCloudBackup").addEventListener("click", createCloudBackup);
+  $("#restoreCloudBackup").addEventListener("click", restoreCloudBackup);
+  $("#deleteCloudBackup").addEventListener("click", deleteCloudBackup);
   $("#exportJson").addEventListener("click", exportJson);
   $("#exportCsv").addEventListener("click", exportCsv);
   $("#importJson").addEventListener("change", importJson);
+  $("#importGameResult").addEventListener("change", importGameResultCsv);
 }
 
 function updateScore(event) {
@@ -2007,6 +2213,13 @@ function updateReplay(event) {
   const index = event.target.dataset.replay;
   if (index === undefined) return;
   state.replayCodes[Number(index)] = event.target.value.trim();
+  saveState();
+}
+
+function updateRoom(event) {
+  const index = event.target.dataset.room;
+  if (index === undefined) return;
+  state.roomCodes[Number(index)] = event.target.value.trim();
   saveState();
 }
 

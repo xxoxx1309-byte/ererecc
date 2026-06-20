@@ -1,5 +1,5 @@
 (function () {
-  const EVENT_COLUMNS = "id,owner_id,slug,name,published,registration_open,settings,event_info,teams,captains,draft,weapon_assignments,replay_codes,scores,created_at,updated_at";
+  const EVENT_COLUMNS = "id,owner_id,slug,name,published,registration_open,settings,event_info,teams,captains,draft,weapon_assignments,room_codes,replay_codes,match_records,scores,created_at,updated_at";
 
   function createClient(config = {}) {
     const supabaseUrl = String(config.supabaseUrl || "").trim();
@@ -22,7 +22,9 @@
       captains: state.captains || {},
       draft: state.draft || {},
       weapon_assignments: state.weaponAssignments || {},
+      room_codes: state.roomCodes || [],
       replay_codes: state.replayCodes || [],
+      match_records: state.matchRecords || [],
       scores: state.scores || []
     };
   }
@@ -37,7 +39,9 @@
       captains: event.captains || {},
       draft: event.draft || {},
       weaponAssignments: event.weapon_assignments || {},
+      roomCodes: event.room_codes || [],
       replayCodes: event.replay_codes || [],
+      matchRecords: event.match_records || [],
       scores: event.scores || [],
       updatedAt: event.updated_at || null
     };
@@ -88,6 +92,7 @@
   function create(config) {
     const client = createClient(config);
     let applicantChannel = null;
+    let eventChannel = null;
     return {
       configured: Boolean(client),
       client,
@@ -163,9 +168,16 @@
         return data;
       },
 
-      async updateEvent(eventId, state, extras = {}) {
-        const { data, error } = await client.from("events").update({ ...eventPayload(state), ...extras }).eq("id", eventId).select(EVENT_COLUMNS).single();
+      async updateEvent(eventId, state, extras = {}, expectedUpdatedAt = "") {
+        let query = client.from("events").update({ ...eventPayload(state), ...extras }).eq("id", eventId);
+        if (expectedUpdatedAt) query = query.eq("updated_at", expectedUpdatedAt);
+        const { data, error } = await query.select(EVENT_COLUMNS).maybeSingle();
         if (error) throw error;
+        if (!data) {
+          const conflict = new Error("다른 운영자가 먼저 수정했습니다. 최신 상태를 다시 불러왔습니다.");
+          conflict.code = "EVENT_CONFLICT";
+          throw conflict;
+        }
         return data;
       },
 
@@ -215,6 +227,53 @@
       async clearApplicants(eventId) {
         const { error } = await client.from("applicants").delete().eq("event_id", eventId);
         if (error) throw error;
+      },
+
+      async replaceApplicants(eventId, applicants) {
+        const { error: deleteError } = await client.from("applicants").delete().eq("event_id", eventId);
+        if (deleteError) throw deleteError;
+        if (!applicants.length) return;
+        const { error: insertError } = await client.from("applicants").insert(applicants.map((applicant) => applicantToRow(eventId, applicant)));
+        if (insertError) throw insertError;
+      },
+
+      async listBackups(eventId) {
+        const { data, error } = await client.from("event_backups").select("id,event_id,label,snapshot,created_at").eq("event_id", eventId).order("created_at", { ascending: false });
+        if (error) throw error;
+        return data || [];
+      },
+
+      async createBackup(eventId, label, snapshot) {
+        const { data, error } = await client.from("event_backups").insert({ event_id: eventId, label, snapshot }).select("id,event_id,label,snapshot,created_at").single();
+        if (error) throw error;
+        return data;
+      },
+
+      async deleteBackup(backupId) {
+        const { error } = await client.from("event_backups").delete().eq("id", backupId);
+        if (error) throw error;
+      },
+
+      subscribeEvent(eventId, callback) {
+        if (eventChannel) client.removeChannel(eventChannel);
+        eventChannel = client.channel(`event:${eventId}`)
+          .on("postgres_changes", { event: "UPDATE", schema: "public", table: "events", filter: `id=eq.${eventId}` }, callback)
+          .subscribe();
+        return () => {
+          if (eventChannel) client.removeChannel(eventChannel);
+          eventChannel = null;
+        };
+      },
+
+      subscribePublicEvent(eventId, callback) {
+        if (eventChannel) client.removeChannel(eventChannel);
+        eventChannel = client.channel(`public-event:${eventId}`)
+          .on("postgres_changes", { event: "UPDATE", schema: "public", table: "public_event_updates", filter: `event_id=eq.${eventId}` }, callback)
+          .subscribe();
+        return () => {
+          if (eventChannel) client.removeChannel(eventChannel);
+          eventChannel = null;
+        };
       },
 
       subscribeApplicants(eventId, callback) {
