@@ -1,4 +1,22 @@
 const API_BASE = "https://open-api.bser.io";
+const API_INTERVAL_MS = 250;
+const responseCache = new Map<string, { expiresAt: number; data: Record<string, unknown> }>();
+let apiQueue = Promise.resolve();
+let nextApiRequestAt = 0;
+
+function delay(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function waitForApiSlot() {
+  const turn = apiQueue.then(async () => {
+    const waitMs = Math.max(0, nextApiRequestAt - Date.now());
+    if (waitMs) await delay(waitMs);
+    nextApiRequestAt = Date.now() + API_INTERVAL_MS;
+  });
+  apiQueue = turn.catch(() => undefined);
+  await turn;
+}
 
 function corsHeaders(origin: string | null) {
   const allowedOrigin = Deno.env.get("ALLOWED_ORIGIN") || "*";
@@ -10,15 +28,33 @@ function corsHeaders(origin: string | null) {
   };
 }
 
-async function erFetch(path: string, apiKey: string) {
-  const response = await fetch(`${API_BASE}/${path.replace(/^\/+/, "")}`, {
-    headers: { accept: "application/json", "x-api-key": apiKey }
-  });
-  const json = await response.json().catch(() => ({}));
-  if (!response.ok || Number(json.code) >= 400) {
-    throw new Error(json.message || `이터널 리턴 API 오류 (${response.status})`);
+async function erFetch(path: string, apiKey: string, optional = false) {
+  const normalizedPath = path.replace(/^\/+/, "");
+  const cached = responseCache.get(normalizedPath);
+  if (cached && cached.expiresAt > Date.now()) return cached.data;
+
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    await waitForApiSlot();
+    const response = await fetch(`${API_BASE}/${normalizedPath}`, {
+      headers: { accept: "application/json", "x-api-key": apiKey }
+    });
+    const json = await response.json().catch(() => ({}));
+    if (response.status === 429 && attempt < 3) {
+      const retryAfter = Number(response.headers.get("retry-after") || 0) * 1000;
+      await delay(Math.max(retryAfter, 600 * (attempt + 1)));
+      continue;
+    }
+    if (optional && (response.status === 404 || Number(json.code) === 404)) return {};
+    if (!response.ok || Number(json.code) >= 400) {
+      if (response.status === 429) throw new Error("공식 API 요청이 많습니다. 잠시 후 다시 조회해 주세요.");
+      throw new Error(json.message || `이터널 리턴 API 오류 (${response.status})`);
+    }
+    const ttl = normalizedPath.startsWith("v1/user/nickname") ? 10 * 60_000 : 30_000;
+    if (responseCache.size > 500) responseCache.clear();
+    responseCache.set(normalizedPath, { expiresAt: Date.now() + ttl, data: json });
+    return json;
   }
-  return json;
+  throw new Error("공식 API 요청이 많습니다. 잠시 후 다시 조회해 주세요.");
 }
 
 Deno.serve(async (request) => {
@@ -38,8 +74,8 @@ Deno.serve(async (request) => {
 
     const userId = encodeURIComponent(user.userId);
     const [rankJson, statsJson] = await Promise.all([
-      erFetch(`v1/rank/uid/${userId}/${Number(seasonId)}/${Number(teamMode)}`, apiKey),
-      erFetch(`v2/user/stats/uid/${userId}/${Number(seasonId)}/3`, apiKey)
+      erFetch(`v1/rank/uid/${userId}/${Number(seasonId)}/${Number(teamMode)}`, apiKey, true),
+      erFetch(`v2/user/stats/uid/${userId}/${Number(seasonId)}/3`, apiKey, true)
     ]);
     const stats = (statsJson.userStats || []).find((item: Record<string, unknown>) => Number(item.matchingTeamMode) === Number(teamMode))
       || statsJson.userStats?.[0]

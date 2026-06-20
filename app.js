@@ -914,8 +914,8 @@ async function lookupRank() {
     rankCache = {
       userId: user.userId,
       nickname,
-      mmr: rankJson.userRank?.mmr ?? stats.mmr ?? null,
-      rank: rankJson.userRank?.rank ?? stats.rank ?? null,
+      mmr: rankJson.userRank?.mmr ?? stats.mmr ?? 0,
+      rank: rankJson.userRank?.rank ?? stats.rank ?? 0,
       totalGames: stats.totalGames ?? 0,
       totalWins: stats.totalWins ?? 0,
       averageRank: stats.averageRank ?? null,
