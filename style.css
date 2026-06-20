@@ -876,16 +876,18 @@ button:disabled { cursor: not-allowed; opacity: .55; transform: none; }
 .team-card li { margin: 9px 0; line-height: 1.35; }
 .team-card small { color: var(--subtle); font-size: 11px; }
 
-.team-member-change {
-  width: 100%;
-  min-height: 30px;
-  margin-top: 6px;
-  padding: 4px 7px;
-  color: var(--subtle);
-  background: var(--surface-2);
-  border-radius: 5px;
-  font-size: 11px;
+.team-drag-help { grid-column: 1 / -1; color: var(--subtle); font-size: 12px; }
+.team-member-row.draggable { cursor: grab; }
+.team-member-row.draggable:active { cursor: grabbing; }
+.team-member-row.dragging { opacity: .35; }
+.team-member-row.drag-over {
+  margin-inline: -6px;
+  padding: 6px;
+  background: var(--rose-soft);
+  outline: 2px solid var(--rose);
+  border-radius: 6px;
 }
+.team-card.drag-over { outline: 3px dashed var(--rose); outline-offset: 3px; }
 
 .role-tag {
   display: inline-block;

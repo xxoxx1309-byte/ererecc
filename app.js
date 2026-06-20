@@ -1105,23 +1105,6 @@ function teamTotal(teamId) {
   return state.scores.reduce((sum, match) => sum + scoreFor(match[teamId]), 0);
 }
 
-function teamMemberChangeOptions(sourceTeam, playerId) {
-  const teamSize = Number(state.settings.teamSize || 3);
-  return state.teams.filter((team) => team.id !== sourceTeam.id).map((team) => {
-    const moveOption = team.members.length < teamSize
-      ? `<option value="move|${team.id}">${escapeHtml(team.name)} 빈자리로 이동</option>`
-      : "";
-    const swapOptions = team.members.map((memberId) => {
-      if (state.captains[team.id] === memberId) return "";
-      const member = getApplicant(memberId);
-      if (!member) return "";
-      const name = member.discordName || member.nickname;
-      return `<option value="swap|${team.id}|${memberId}">${escapeHtml(team.name)} · ${escapeHtml(name)}와 교체</option>`;
-    }).join("");
-    return `${moveOption}${swapOptions}`;
-  }).join("");
-}
-
 function renderTeams() {
   $("#teamCount").textContent = state.teams.length;
   renderDraftBoard();
@@ -1135,17 +1118,17 @@ function renderTeams() {
       const captain = state.captains[team.id] === player.id;
       const name = player.discordName ? `${player.discordName} (${player.nickname})` : player.nickname;
       const roleOrder = (player.roles || []).map((role, roleIndex) => `${roleIndex + 1}. ${role}`).join(" / ");
-      const changeOptions = captain ? "" : teamMemberChangeOptions(team, player.id);
-      return `<li>
+      return `<li class="team-member-row${captain ? " captain" : " draggable"}" data-team-member="${team.id}|${player.id}" draggable="${captain ? "false" : "true"}">
         <div>${captain ? "팀장 · " : ""}${escapeHtml(name)}<span class="role-tag">${escapeHtml(player.roles?.[0] || "-")}</span></div>
         <small>MMR ${formatNumber(player.mmr)} · ${escapeHtml(roleOrder || "역할군 미지정")}</small>
-        ${changeOptions ? `<select class="team-member-change" data-change-team-member="${team.id}|${player.id}" aria-label="${escapeHtml(name)} 팀 변경">
-          <option value="">교체·이동…</option>${changeOptions}
-        </select>` : ""}
       </li>`;
     }).join("");
-    return `<article class="team-card"><header><span>${team.name}</span><span>합계 ${formatNumber(totalMmr)}</span></header><ol>${members}</ol></article>`;
-  }).join("") || `<p class="note">참가자를 등록한 뒤 자동 편성을 실행하세요.</p>`;
+    return `<article class="team-card" data-drop-team="${team.id}"><header><span>${team.name}</span><span>합계 ${formatNumber(totalMmr)}</span></header><ol>${members}</ol></article>`;
+  }).join("");
+  const cards = $("#teamsBoard").innerHTML;
+  $("#teamsBoard").innerHTML = cards
+    ? `<p class="team-drag-help">팀원을 다른 팀원 위에 놓으면 교체되고, 팀 카드의 빈 공간에 놓으면 이동합니다. 팀장은 고정됩니다.</p>${cards}`
+    : `<p class="note">참가자를 등록한 뒤 자동 편성을 실행하세요.</p>`;
   renderCaptains();
 }
 
@@ -1855,7 +1838,11 @@ function bindEvents() {
   $("#banBoard").addEventListener("change", updateBan);
   $("#replayBoard").addEventListener("change", updateReplay);
   $("#captainBoard").addEventListener("change", updateCaptain);
-  $("#teamsBoard").addEventListener("change", updateTeamMember);
+  $("#teamsBoard").addEventListener("dragstart", startTeamMemberDrag);
+  $("#teamsBoard").addEventListener("dragover", handleTeamMemberDragOver);
+  $("#teamsBoard").addEventListener("dragleave", clearTeamDropTarget);
+  $("#teamsBoard").addEventListener("drop", dropTeamMember);
+  $("#teamsBoard").addEventListener("dragend", clearTeamDragState);
   $("#exportJson").addEventListener("click", exportJson);
   $("#exportCsv").addEventListener("click", exportCsv);
   $("#importJson").addEventListener("change", importJson);
@@ -1892,34 +1879,66 @@ function updateCaptain(event) {
   saveState();
 }
 
-function updateTeamMember(event) {
-  const sourceToken = event.target.dataset.changeTeamMember;
-  if (!sourceToken || !event.target.value) return;
+function startTeamMemberDrag(event) {
+  const row = event.target.closest("[data-team-member]");
+  if (!row || row.classList.contains("captain")) return event.preventDefault();
+  event.dataTransfer.effectAllowed = "move";
+  event.dataTransfer.setData("text/plain", row.dataset.teamMember);
+  row.classList.add("dragging");
+}
+
+function handleTeamMemberDragOver(event) {
+  const source = $(".team-member-row.dragging");
+  if (!source) return;
+  const targetRow = event.target.closest(".team-member-row:not(.captain)");
+  const targetCard = event.target.closest("[data-drop-team]");
+  if (!targetCard || targetCard.dataset.dropTeam === source.dataset.teamMember.split("|")[0]) return;
+  event.preventDefault();
+  clearTeamDropTarget();
+  (targetRow || targetCard).classList.add("drag-over");
+}
+
+function clearTeamDropTarget() {
+  document.querySelectorAll("#teamsBoard .drag-over").forEach((element) => element.classList.remove("drag-over"));
+}
+
+function clearTeamDragState() {
+  clearTeamDropTarget();
+  document.querySelectorAll("#teamsBoard .dragging").forEach((element) => element.classList.remove("dragging"));
+}
+
+function dropTeamMember(event) {
+  event.preventDefault();
+  const sourceToken = event.dataTransfer.getData("text/plain");
+  const targetRow = event.target.closest(".team-member-row");
+  const targetCard = event.target.closest("[data-drop-team]");
+  clearTeamDragState();
+  if (!sourceToken || !targetCard) return;
   const [sourceTeamId, playerId] = sourceToken.split("|");
-  const [action, targetTeamId, targetPlayerId] = event.target.value.split("|");
+  const targetTeamId = targetCard.dataset.dropTeam;
   const sourceTeam = state.teams.find((team) => team.id === sourceTeamId);
   const targetTeam = state.teams.find((team) => team.id === targetTeamId);
-  if (!sourceTeam || !targetTeam || state.captains[sourceTeam.id] === playerId) return render();
+  if (!sourceTeam || !targetTeam || sourceTeam === targetTeam || state.captains[sourceTeam.id] === playerId) return;
   const sourceIndex = sourceTeam.members.indexOf(playerId);
-  if (sourceIndex < 0) return render();
+  if (sourceIndex < 0) return;
 
-  if (action === "move" && targetTeam.members.length < Number(state.settings.teamSize || 3)) {
-    sourceTeam.members.splice(sourceIndex, 1);
-    targetTeam.members.push(playerId);
-    saveState();
-    return toast(`${sourceTeam.name}에서 ${targetTeam.name}으로 이동했습니다.`);
-  }
-
-  if (action === "swap" && targetPlayerId && state.captains[targetTeam.id] !== targetPlayerId) {
+  if (targetRow) {
+    const [, targetPlayerId] = targetRow.dataset.teamMember.split("|");
+    if (state.captains[targetTeam.id] === targetPlayerId) return toast("팀장은 교체할 수 없습니다.");
     const targetIndex = targetTeam.members.indexOf(targetPlayerId);
-    if (targetIndex < 0) return render();
+    if (targetIndex < 0) return;
     sourceTeam.members[sourceIndex] = targetPlayerId;
     targetTeam.members[targetIndex] = playerId;
     saveState();
     toast(`${sourceTeam.name}과 ${targetTeam.name}의 팀원을 교체했습니다.`);
     return;
   }
-  render();
+
+  if (targetTeam.members.length >= Number(state.settings.teamSize || 3)) return toast(`${targetTeam.name}에 빈자리가 없습니다.`);
+  sourceTeam.members.splice(sourceIndex, 1);
+  targetTeam.members.push(playerId);
+  saveState();
+  toast(`${sourceTeam.name}에서 ${targetTeam.name}으로 이동했습니다.`);
 }
 
 function toast(message) {
