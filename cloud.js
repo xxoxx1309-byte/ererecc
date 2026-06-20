@@ -191,6 +191,14 @@
         if (error) throw error;
       },
 
+      async updateApplicant(eventId, applicant) {
+        const row = applicantToRow(eventId, applicant);
+        delete row.id;
+        delete row.event_id;
+        const { error } = await client.from("applicants").update(row).eq("id", applicant.id).eq("event_id", eventId);
+        if (error) throw error;
+      },
+
       async deleteApplicant(applicantId) {
         const { error } = await client.from("applicants").delete().eq("id", applicantId);
         if (error) throw error;

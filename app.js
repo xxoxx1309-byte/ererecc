@@ -163,6 +163,7 @@ let cloudCreateOpen = false;
 let otpEmail = sessionStorage.getItem(OTP_EMAIL_KEY) || "";
 let otpSentAt = Number(sessionStorage.getItem(OTP_SENT_AT_KEY) || 0);
 let otpCooldownTimer = null;
+let editingApplicantId = null;
 
 const $ = (selector) => document.querySelector(selector);
 
@@ -1394,8 +1395,74 @@ function renderApplicants() {
       <td>${player.rank ? `${formatNumber(player.rank)}위` : "-"}</td>
       <td>${formatWinRate(player.totalWins, player.totalGames)}</td>
       <td><div class="roster-most">${renderRosterMost(player)}</div></td>
-      <td><button class="danger" data-remove="${player.id}" type="button" aria-label="${escapeHtml(player.nickname)} 삭제"><i data-lucide="trash-2"></i></button></td>
+      <td><div class="roster-actions">
+        <button class="secondary" data-edit-applicant="${player.id}" type="button" aria-label="${escapeHtml(player.nickname)} 수정"><i data-lucide="pencil"></i></button>
+        <button class="danger" data-remove="${player.id}" type="button" aria-label="${escapeHtml(player.nickname)} 삭제"><i data-lucide="trash-2"></i></button>
+      </div></td>
     </tr>`).join("") || `<tr><td colspan="9">등록된 참가자가 없습니다.</td></tr>`;
+}
+
+function openApplicantEditor(applicantId) {
+  if (cloud?.configured && !canManageCloudEvent()) return toast("이 내전의 운영자만 수정할 수 있습니다.");
+  const player = getApplicant(applicantId);
+  if (!player) return;
+  editingApplicantId = applicantId;
+  $("#editNickname").value = player.nickname || "";
+  $("#editDiscordName").value = player.discordName || "";
+  $("#editMmr").value = Number(player.mmr || 0);
+  $("#editRank").value = Number(player.rank || 0);
+  $("#editTotalGames").value = Number(player.totalGames || 0);
+  $("#editTotalWins").value = Number(player.totalWins || 0);
+  $("#editMemo").value = player.memo || "";
+  const displayedMost = (player.mostStats || []).length
+    ? player.mostStats.map(characterNameForStat)
+    : (player.most || []);
+  $("#editMost").value = displayedMost.join(", ");
+  ["editRole1", "editRole2", "editRole3"].forEach((id, index) => {
+    const select = $(`#${id}`);
+    select.innerHTML = `<option value="">미지정</option>${ROLES.map((role) => `<option value="${role}">${role}</option>`).join("")}`;
+    select.value = player.roles?.[index] || "";
+  });
+  $("#applicantEditDialog").showModal();
+  refreshIcons();
+}
+
+async function saveApplicantEdit(event) {
+  event.preventDefault();
+  const player = getApplicant(editingApplicantId);
+  if (!player) return $("#applicantEditDialog").close();
+  const roles = [$("#editRole1").value, $("#editRole2").value, $("#editRole3").value].filter(Boolean);
+  if (roles.length !== 3 || new Set(roles).size !== 3) return toast("역할군 3개를 서로 다르게 지정해 주세요.");
+  const totalGames = Math.max(0, Number($("#editTotalGames").value || 0));
+  const totalWins = Math.max(0, Number($("#editTotalWins").value || 0));
+  if (totalWins > totalGames) return toast("승리 수는 전체 경기 수보다 클 수 없습니다.");
+  const most = $("#editMost").value.split(",").map((name) => name.trim()).filter(Boolean).slice(0, 3);
+  const previousMost = (player.mostStats || []).length ? player.mostStats.map(characterNameForStat) : (player.most || []);
+  const updated = {
+    ...player,
+    nickname: $("#editNickname").value.trim(),
+    discordName: $("#editDiscordName").value.trim(),
+    mmr: Math.max(0, Number($("#editMmr").value || 0)),
+    rank: Math.max(0, Number($("#editRank").value || 0)),
+    totalGames,
+    totalWins,
+    roles,
+    most,
+    mostStats: most.join("|") === previousMost.join("|") ? (player.mostStats || []) : [],
+    memo: $("#editMemo").value.trim()
+  };
+  if (!updated.nickname) return toast("인게임 닉네임을 입력해 주세요.");
+  try {
+    if (cloud?.configured && cloudEvent) await cloud.updateApplicant(cloudEvent.id, updated);
+    state.applicants[state.applicants.findIndex((item) => item.id === player.id)] = updated;
+    $("#applicantEditDialog").close();
+    editingApplicantId = null;
+    saveState();
+    toast("참가자 정보를 수정했습니다.");
+  } catch (error) {
+    const duplicate = error.code === "23505" || /duplicate|unique/i.test(error.message);
+    toast(duplicate ? "이미 등록된 인게임 닉네임입니다." : error.message);
+  }
 }
 
 function renderOverview() {
@@ -1820,6 +1887,8 @@ function bindEvents() {
     saveState();
   });
   $("#applicantRows").addEventListener("click", async (event) => {
+    const editButton = event.target.closest("[data-edit-applicant]");
+    if (editButton) return openApplicantEditor(editButton.dataset.editApplicant);
     const button = event.target.closest("[data-remove]");
     if (!button) return;
     const id = button.dataset.remove;
@@ -1834,6 +1903,8 @@ function bindEvents() {
     state.draft.picked = state.draft.picked.filter((playerId) => playerId !== id);
     saveState();
   });
+  $("#cancelApplicantEdit").addEventListener("click", () => $("#applicantEditDialog").close());
+  $("#applicantEditForm").addEventListener("submit", saveApplicantEdit);
   $("#scoreBoard").addEventListener("change", updateScore);
   $("#banBoard").addEventListener("change", updateBan);
   $("#replayBoard").addEventListener("change", updateReplay);

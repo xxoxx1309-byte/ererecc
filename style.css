@@ -943,6 +943,8 @@ th { color: #46413d; background: var(--surface-2); font-family: var(--heading); 
 .roster-table tbody tr:hover { background: #fffbf6; }
 .roster-table td { font-size: 13px; }
 .roster-table button { min-height: 32px; padding: 5px 8px; }
+.roster-actions { display: flex; gap: 5px; }
+.applicant-edit-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 
 dialog {
   width: min(820px, calc(100% - 28px));
