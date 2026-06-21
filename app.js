@@ -1869,21 +1869,45 @@ async function importGameResultCsv(event) {
       matchIndex = state.settings.matchCount - 1;
       bindSettings();
     }
-    const teams = new Map();
+    const csvTeams = new Map();
     objects.forEach((record) => {
-      const teamName = String(record.teamname || "").trim();
-      if (!teams.has(teamName)) teams.set(teamName, record);
+      const rank = String(record.rank || "").trim();
+      if (!rank) return;
+      if (!csvTeams.has(rank)) csvTeams.set(rank, []);
+      csvTeams.get(rank).push(record);
     });
     let applied = 0;
-    teams.forEach((record, csvTeamName) => {
-      const teamNumber = Number(csvTeamName.match(/\d+/)?.[0]);
-      const team = state.teams.find((item) => Number(item.name.match(/\d+/)?.[0]) === teamNumber);
+    const assignedTeamIds = new Set();
+    csvTeams.forEach((records) => {
+      const record = records[0];
+      const csvNicknames = new Set(records.map((item) => String(item.nickname || "").trim().toLowerCase()).filter(Boolean));
+      let team = state.teams
+        .filter((item) => !assignedTeamIds.has(item.id))
+        .map((item) => ({
+          item,
+          matches: item.members.filter((id) => csvNicknames.has(String(getApplicant(id)?.nickname || "").trim().toLowerCase())).length
+        }))
+        .sort((a, b) => b.matches - a.matches)[0];
+      team = team?.matches > 0 ? team.item : null;
+
+      if (!team) {
+        const memberIds = records
+          .map((item) => state.applicants.find((player) => player.nickname.toLowerCase() === String(item.nickname || "").trim().toLowerCase())?.id)
+          .filter(Boolean);
+        if (memberIds.length === csvNicknames.size && memberIds.length) {
+          team = { id: crypto.randomUUID(), name: `${state.teams.length + 1}팀`, members: memberIds };
+          state.teams.push(team);
+        }
+      }
       if (!team) return;
+      assignedTeamIds.add(team.id);
+      const teamKills = Number(record["team kill"] || 0);
+      const day1Kills = Number(record["down can not eliminate"] || 0);
       state.scores[matchIndex][team.id] = {
         ...(state.scores[matchIndex][team.id] || {}),
         place: Number(record.rank || 0) || "",
-        day1Kills: 0,
-        lateKills: Number(record["team kill"] || 0),
+        day1Kills,
+        lateKills: Math.max(0, teamKills - day1Kills),
         penaltyDeaths: Number(state.scores[matchIndex][team.id]?.penaltyDeaths || 0),
         bans: state.scores[matchIndex][team.id]?.bans || ""
       };
