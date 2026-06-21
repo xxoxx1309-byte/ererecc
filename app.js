@@ -300,14 +300,15 @@ function sanitizeStateRelations(target) {
   });
 
   const validTeamIds = new Set(target.teams.map((team) => team.id));
+  const validTeamNames = new Set(target.teams.map((team) => team.name));
   target.captains = Object.fromEntries(Object.entries(target.captains).filter(([teamId, applicantId]) => {
     const team = target.teams.find((item) => item.id === teamId);
     return team && team.members.includes(applicantId);
   }));
   target.draft.picked = [...new Set(target.draft.picked.map(String))].filter((id) => validApplicantIds.has(id));
   target.draft.captains = [...new Set(target.draft.captains.map(String))].filter((id) => validApplicantIds.has(id));
-  target.weaponAssignments = Object.fromEntries(Object.entries(target.weaponAssignments).filter(([teamId, groupId]) => (
-    validTeamIds.has(teamId) && WEAPON_GROUPS.some((group) => group.id === groupId)
+  target.weaponAssignments = Object.fromEntries(Object.entries(target.weaponAssignments).filter(([teamName, groupId]) => (
+    validTeamNames.has(teamName) && WEAPON_GROUPS.some((group) => group.id === groupId)
   )));
   target.scores = target.scores.map((match) => Object.fromEntries(Object.entries(match || {}).filter(([teamId]) => validTeamIds.has(teamId))));
 }
@@ -1847,6 +1848,13 @@ function parseCsv(text) {
   return rows;
 }
 
+function weaponGroupFromCsvName(name) {
+  const normalized = String(name || "").replaceAll(/\s+/g, "").toLowerCase();
+  return WEAPON_GROUPS.find((group) => group.weapons.every((weapon) => (
+    normalized.includes(weapon.replaceAll(/\s+/g, "").toLowerCase())
+  ))) || null;
+}
+
 async function importGameResultCsv(event) {
   const file = event.target.files[0];
   if (!file) return;
@@ -1901,6 +1909,8 @@ async function importGameResultCsv(event) {
       }
       if (!team) return;
       assignedTeamIds.add(team.id);
+      const weaponGroup = weaponGroupFromCsvName(record.teamname);
+      if (weaponGroup) state.weaponAssignments[team.name] = weaponGroup.id;
       const teamKills = Number(record["team kill"] || 0);
       const day1Kills = Number(record["down can not eliminate"] || 0);
       state.scores[matchIndex][team.id] = {
