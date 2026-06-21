@@ -1848,13 +1848,6 @@ function parseCsv(text) {
   return rows;
 }
 
-function weaponGroupFromCsvName(name) {
-  const normalized = String(name || "").replaceAll(/\s+/g, "").toLowerCase();
-  return WEAPON_GROUPS.find((group) => group.weapons.every((weapon) => (
-    normalized.includes(weapon.replaceAll(/\s+/g, "").toLowerCase())
-  ))) || null;
-}
-
 async function importGameResultCsv(event) {
   const file = event.target.files[0];
   if (!file) return;
@@ -1909,8 +1902,6 @@ async function importGameResultCsv(event) {
       }
       if (!team) return;
       assignedTeamIds.add(team.id);
-      const weaponGroup = weaponGroupFromCsvName(record.teamname);
-      if (weaponGroup) state.weaponAssignments[team.name] = weaponGroup.id;
       const teamKills = Number(record["team kill"] || 0);
       const day1Kills = Number(record["down can not eliminate"] || 0);
       state.scores[matchIndex][team.id] = {
