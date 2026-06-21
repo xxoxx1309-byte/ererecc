@@ -2112,6 +2112,18 @@ function bindEvents() {
     }
   });
   $("#applicantForm").addEventListener("submit", submitApplicant);
+  $("#refreshApplicants").addEventListener("click", async () => {
+    const button = $("#refreshApplicants");
+    button.disabled = true;
+    try {
+      await reloadCloudApplicants();
+      toast(`참가자 ${state.applicants.length}명을 불러왔습니다.`);
+    } catch (error) {
+      toast(error.message);
+    } finally {
+      button.disabled = false;
+    }
+  });
   $("#resetForm").addEventListener("click", resetForm);
   $("#makeTeams").addEventListener("click", makeTeams);
   $("#clearTeams").addEventListener("click", () => {

@@ -421,9 +421,14 @@
           <p class="section-number">04</p>
           <h2>참가자 명단</h2>
         </div>
-        <button class="danger" id="clearApplicants" type="button">
-          <i data-lucide="trash-2"></i> 전체 삭제
-        </button>
+        <div class="button-row">
+          <button class="secondary" id="refreshApplicants" type="button">
+            <i data-lucide="refresh-cw"></i> 명단 새로고침
+          </button>
+          <button class="danger" id="clearApplicants" type="button">
+            <i data-lucide="trash-2"></i> 전체 삭제
+          </button>
+        </div>
       </div>
       <div class="table-wrap">
         <table class="roster-table">
@@ -606,8 +611,8 @@
 
   <script src="./config.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="./cloud.js?v=20260620-7"></script>
+  <script src="./cloud.js?v=20260621-1"></script>
   <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
-  <script src="./app.js?v=20260620-7"></script>
+  <script src="./app.js?v=20260621-1"></script>
 </body>
 </html>
