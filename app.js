@@ -160,6 +160,8 @@ let cloudOperator = null;
 let cloudOperators = [];
 let cloudApplicantUnsubscribe = null;
 let cloudEventUnsubscribe = null;
+let cloudApplicantPollTimer = null;
+let cloudApplicantReloading = false;
 let cloudBackups = [];
 let cloudSaveTimer = null;
 let cloudLoading = false;
@@ -598,9 +600,27 @@ function applyCloudState(event, applicants = []) {
 }
 
 async function reloadCloudApplicants() {
+  if (!canViewCloudEvent() || cloudApplicantReloading) return;
+  cloudApplicantReloading = true;
+  try {
+    state.applicants = await cloud.applicants(cloudEvent.id);
+    render();
+  } finally {
+    cloudApplicantReloading = false;
+  }
+}
+
+function stopCloudApplicantPolling() {
+  clearInterval(cloudApplicantPollTimer);
+  cloudApplicantPollTimer = null;
+}
+
+function startCloudApplicantPolling() {
+  stopCloudApplicantPolling();
   if (!canViewCloudEvent()) return;
-  state.applicants = await cloud.applicants(cloudEvent.id);
-  render();
+  cloudApplicantPollTimer = setInterval(() => {
+    if (!document.hidden) reloadCloudApplicants().catch((error) => console.warn("Applicant refresh failed", error));
+  }, 5000);
 }
 
 async function reloadCloudEventState() {
@@ -633,6 +653,7 @@ function subscribeCloudApplicants() {
     clearTimeout(subscribeCloudApplicants.timer);
     subscribeCloudApplicants.timer = setTimeout(() => reloadCloudApplicants().catch((error) => toast(error.message)), 180);
   });
+  startCloudApplicantPolling();
 }
 
 async function loadAdminCloudEvent(eventId) {
@@ -703,6 +724,7 @@ async function handleCloudSession(session, preserveApplyView = false) {
     cloudOperators = [];
     if (cloudApplicantUnsubscribe) cloudApplicantUnsubscribe();
     cloudApplicantUnsubscribe = null;
+    stopCloudApplicantPolling();
     if (cloudEventUnsubscribe) cloudEventUnsubscribe();
     cloudEventUnsubscribe = null;
     cloudBackups = [];
@@ -2452,5 +2474,11 @@ async function bootstrap() {
   await initializeCloud();
   await refreshApiMetadata();
 }
+
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden && canViewCloudEvent()) {
+    reloadCloudApplicants().catch((error) => console.warn("Applicant refresh failed", error));
+  }
+});
 
 bootstrap();
