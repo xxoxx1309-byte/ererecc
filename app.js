@@ -2,6 +2,7 @@ const STORAGE_KEY = "er-custom-match-calculator-v2";
 const LEGACY_STORAGE_KEY = "er-scrim-calculator-v1";
 const API_BASE = "https://open-api.bser.io";
 const DEFAULT_SEASON_ID = 39;
+const RANK_TEAM_MODE = 3;
 const STATE_VERSION = 5;
 const ROLES = ["스증원딜", "평원딜", "공격력브루저", "스증브루저", "암살자", "서포터", "탱커"];
 const KOREAN_CHARACTER_NAMES = {
@@ -984,7 +985,7 @@ async function lookupRank() {
   updateRankPreview(null, "loading");
   try {
     const seasonId = state.settings.seasonId;
-    const teamMode = state.settings.teamMode;
+    const teamMode = RANK_TEAM_MODE;
     let user;
     let rankJson;
     let peakJson;
@@ -1087,7 +1088,70 @@ function updateRankPreview(data, stateName = "success") {
 }
 
 function teamModeLabel() {
-  return ({ 1: "솔로", 2: "듀오", 3: "스쿼드" })[state.settings.teamMode] || "스쿼드";
+  return "스쿼드 랭크";
+}
+
+async function syncMissingApplicantRanks() {
+  if (!canManageCloudEvent()) return toast("이 내전의 참가자 정보를 수정할 권한이 없습니다.");
+  const targets = state.applicants.filter((player) => !player.currentMmr && !player.rank);
+  if (!targets.length) return toast("랭크 정보가 누락된 참가자가 없습니다.");
+
+  const button = $("#syncApplicantRanks");
+  button.disabled = true;
+  let updated = 0;
+  let failed = 0;
+  try {
+    for (const player of targets) {
+      button.innerHTML = `<i data-lucide="loader-circle"></i> ${updated + failed + 1}/${targets.length} 조회 중`;
+      refreshIcons();
+      try {
+        const result = await cloud.rankLookup({
+          nickname: player.nickname,
+          seasonId: state.settings.seasonId,
+          teamMode: RANK_TEAM_MODE
+        });
+        const stats = result.stats || {};
+        const mostStats = (stats.characterStats || [])
+          .slice()
+          .sort((a, b) => Number(b.usages || b.totalGames || 0) - Number(a.usages || a.totalGames || 0))
+          .slice(0, 3)
+          .map((item) => ({
+            characterCode: Number(item.characterCode),
+            name: characterNames.get(Number(item.characterCode)) || `실험체 #${item.characterCode}`,
+            totalGames: Number(item.totalGames || item.usages || 0),
+            wins: Number(item.wins || 0)
+          }));
+        const rank = result.rank || {};
+        const peak = result.peak || rank;
+        const refreshed = {
+          ...player,
+          userId: result.user?.userId || player.userId,
+          nickname: result.user?.nickname || player.nickname,
+          mmr: Number(rank.mmr || stats.mmr || 0),
+          currentMmr: Number(rank.mmr || stats.mmr || 0),
+          peakMmr: Number(peak.mmr || rank.mmr || stats.mmr || 0),
+          peakSeasonId: peak.seasonId || state.settings.seasonId,
+          rank: Number(rank.rank || stats.rank || 0),
+          totalGames: Number(stats.totalGames || 0),
+          totalWins: Number(stats.totalWins || 0),
+          most: mostStats.map((item) => item.name),
+          mostStats
+        };
+        await cloud.updateApplicant(cloudEvent.id, refreshed);
+        Object.assign(player, refreshed);
+        updated += 1;
+      } catch (error) {
+        console.warn(`Rank refresh failed: ${player.nickname}`, error);
+        failed += 1;
+      }
+    }
+    render();
+    toast(`랭크 ${updated}명 갱신${failed ? ` · ${failed}명 실패` : ""}`);
+  } finally {
+    button.disabled = false;
+    button.innerHTML = `<i data-lucide="scan-search"></i> 누락 랭크 조회`;
+    refreshIcons();
+  }
 }
 
 async function submitApplicant(event) {
@@ -2112,6 +2176,7 @@ function bindEvents() {
     }
   });
   $("#applicantForm").addEventListener("submit", submitApplicant);
+  $("#syncApplicantRanks").addEventListener("click", syncMissingApplicantRanks);
   $("#refreshApplicants").addEventListener("click", async () => {
     const button = $("#refreshApplicants");
     button.disabled = true;

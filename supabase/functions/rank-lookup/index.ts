@@ -98,7 +98,7 @@ Deno.serve(async (request) => {
     }
 
     return new Response(JSON.stringify({
-      user: { userId: user.userId, nickname: String(nickname).trim() },
+      user: { userId: user.userId, nickname: String(user.nickname || nickname).trim() },
       rank: rankJson.userRank || {},
       peak: { ...peak, seasonId: peakSeasonId },
       stats
