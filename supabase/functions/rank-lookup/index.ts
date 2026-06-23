@@ -87,7 +87,7 @@ Deno.serve(async (request) => {
       const rankedSeasons = (seasonJson.data || [])
         .filter((season: Record<string, unknown>) => !/pre/i.test(String(season.seasonName || "")) && Number(season.seasonID) <= Number(seasonId))
         .sort((a: Record<string, unknown>, b: Record<string, unknown>) => Number(b.seasonID) - Number(a.seasonID))
-        .slice(0, 5);
+        .slice(0, 3);
       for (const season of rankedSeasons) {
         const historical = await erFetch(`v1/rank/uid/${userId}/${Number(season.seasonID)}/${Number(teamMode)}`, apiKey, true);
         if (Number(historical.userRank?.mmr || 0) > Number(peak.mmr || 0)) {

@@ -480,7 +480,7 @@ function friendlyAuthError(error) {
 function friendlyCloudError(error) {
   const message = String(error?.message || "");
   if (/row-level security|permission denied|jwt|session/i.test(message)) return "관리자 로그인이 만료되었습니다. 다시 로그인해 주세요.";
-  if (/duplicate|unique/i.test(message) || error?.code === "23505") return "이미 사용 중인 신청 주소입니다. 주소 칸을 비우고 다시 생성해 주세요.";
+  if (/duplicate|unique/i.test(message) || error?.code === "23505") return "신청 주소가 겹쳤습니다. 새 내전을 한 번 더 생성해 주세요.";
   if (/failed to fetch|network/i.test(message)) return "서버에 연결하지 못했습니다. 잠시 후 다시 시도해 주세요.";
   return message || "내전을 생성하지 못했습니다. 잠시 후 다시 시도해 주세요.";
 }
@@ -1081,7 +1081,7 @@ function updateRankPreview(data, stateName = "success") {
       </div>
       <div class="rank-metrics">
         <div><span>현재 MMR</span><strong>${formatNumber(data.currentMmr ?? data.mmr)}</strong></div>
-        <div><span>최근 5시즌 최고</span><strong>${formatNumber(data.peakMmr ?? data.mmr)}</strong></div>
+        <div><span>최근 3시즌 최고</span><strong>${formatNumber(data.peakMmr ?? data.mmr)}</strong></div>
         <div><span>랭킹</span><strong>${data.rank ? `${formatNumber(data.rank)}위` : "-"}</strong></div>
         <div><span>랭크 게임</span><strong>${formatNumber(data.totalGames)}</strong></div>
         <div><span>승률</span><strong>${winRate}</strong><small>${winRecord}</small></div>
@@ -2344,7 +2344,7 @@ function bindEvents() {
   $("#mmrBasis").addEventListener("change", () => {
     readTeamControls();
     saveState();
-    toast(state.settings.mmrBasis === "peak" ? "최근 5시즌 최고 MMR 기준을 적용했습니다." : "현재 시즌 MMR 기준을 적용했습니다.");
+    toast(state.settings.mmrBasis === "peak" ? "최근 3시즌 최고 MMR 기준을 적용했습니다." : "현재 시즌 MMR 기준을 적용했습니다.");
   });
   $("#draftCaptainMode").addEventListener("change", (event) => {
     state.draft.captainMode = event.target.value;

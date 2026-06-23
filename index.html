@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#fffdf8">
   <title>이터널 리턴 내전 계산기</title>
   <link rel="icon" type="image/svg+xml" href="./favicon.svg">
-  <link rel="stylesheet" href="./style.css?v=20260623-2">
+  <link rel="stylesheet" href="./style.css?v=20260623-3">
 </head>
 <body>
   <header class="topbar">
@@ -344,7 +344,7 @@
         <label>편성 MMR 기준
           <select id="mmrBasis">
             <option value="current">현재 시즌</option>
-            <option value="peak">최근 5시즌 최고</option>
+            <option value="peak">최근 3시즌 최고</option>
           </select>
         </label>
         <p>선택한 MMR 기준으로 정렬한 뒤 스네이크 방식으로 균형을 맞춥니다.</p>
@@ -505,7 +505,7 @@
         <label>인게임 닉네임<input id="editNickname" required></label>
         <label>디스코드 닉네임<input id="editDiscordName"></label>
         <label>현재 시즌 MMR<input id="editMmr" type="number" min="0" required></label>
-        <label>최근 5시즌 최고 MMR<input id="editPeakMmr" type="number" min="0"></label>
+        <label>최근 3시즌 최고 MMR<input id="editPeakMmr" type="number" min="0"></label>
         <label>랭킹<input id="editRank" type="number" min="0"></label>
         <label>전체 경기<input id="editTotalGames" type="number" min="0"></label>
         <label>승리<input id="editTotalWins" type="number" min="0"></label>
@@ -661,8 +661,8 @@
 
   <script src="./config.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="./cloud.js?v=20260623-2"></script>
+  <script src="./cloud.js?v=20260623-3"></script>
   <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
-  <script src="./app.js?v=20260623-2"></script>
+  <script src="./app.js?v=20260623-3"></script>
 </body>
 </html>
