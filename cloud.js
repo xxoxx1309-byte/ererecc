@@ -64,6 +64,9 @@
       total_wins: Number(applicant.totalWins || 0),
       most: applicant.most || [],
       most_stats: applicant.mostStats || [],
+      cobalt_rating: Number(applicant.cobaltRating || 0),
+      cobalt_position: applicant.cobaltPosition || "",
+      cobalt_picks: applicant.cobaltPicks || "",
       memo: applicant.memo || ""
     };
   }
@@ -84,6 +87,9 @@
       totalWins: Number(row.total_wins || 0),
       most: row.most || [],
       mostStats: row.most_stats || [],
+      cobaltRating: Number(row.cobalt_rating || 0),
+      cobaltPosition: row.cobalt_position || "",
+      cobaltPicks: row.cobalt_picks || "",
       memo: row.memo || "",
       createdAt: row.created_at
     };

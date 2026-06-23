@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#fffdf8">
   <title>이터널 리턴 내전 계산기</title>
   <link rel="icon" type="image/svg+xml" href="./favicon.svg">
-  <link rel="stylesheet" href="./style.css?v=20260620-7">
+  <link rel="stylesheet" href="./style.css?v=20260623-1">
 </head>
 <body>
   <header class="topbar">
@@ -277,6 +277,27 @@
               <input id="memo" placeholder="운영자 확인사항">
             </label>
           </div>
+
+          <details class="cobalt-apply-box">
+            <summary><i data-lucide="zap"></i> 코발트 내전 양식</summary>
+            <div class="form-grid">
+              <label>코발트 기준 점수
+                <input id="cobaltRating" type="number" min="0" placeholder="없으면 MMR 사용">
+              </label>
+              <label>코발트 선호 포지션
+                <select id="cobaltPosition">
+                  <option value="">선택 안 함</option>
+                  <option value="front">앞라인 / 이니시</option>
+                  <option value="skirmish">교전 / 브루저</option>
+                  <option value="carry">딜러 / 캐리</option>
+                  <option value="support">서포터 / 유틸</option>
+                </select>
+              </label>
+            </div>
+            <label>코발트 선호 실험체·무기
+              <input id="cobaltPicks" autocomplete="off" placeholder="예: 아야 권총, 헤이즈, 바냐">
+            </label>
+          </details>
           <input id="manualRank" type="hidden">
 
           <button class="primary" id="submitApplicant" type="submit">
@@ -331,6 +352,23 @@
         </label>
         <p>선택한 MMR 기준으로 정렬한 뒤 스네이크 방식으로 균형을 맞춥니다.</p>
       </div>
+      <div class="team-maker-tabs">
+        <article>
+          <strong>랭크 내전 팀짜기</strong>
+          <p>현재 시즌 또는 최근 최고 MMR을 기준으로 스네이크 편성합니다.</p>
+          <button class="secondary" id="makeRankTeams" type="button">
+            <i data-lucide="chart-no-axes-combined"></i> 랭크 기준 편성
+          </button>
+        </article>
+        <article>
+          <strong>코발트 내전 팀짜기</strong>
+          <p>코발트 점수, 선호 포지션, 4v4 구조를 반영해 두 팀씩 균형 편성합니다.</p>
+          <button class="secondary" id="makeCobaltTeams" type="button">
+            <i data-lucide="zap"></i> 코발트 기준 편성
+          </button>
+        </article>
+      </div>
+      <div id="teamMakerGuide" class="team-maker-guide"></div>
       <div class="draft-helper">
         <div class="draft-head">
           <div>
@@ -445,6 +483,7 @@
               <th>랭킹</th>
               <th>승률</th>
               <th>모스트</th>
+              <th>코발트</th>
               <th>관리</th>
             </tr>
           </thead>
@@ -473,6 +512,16 @@
         <label>랭킹<input id="editRank" type="number" min="0"></label>
         <label>전체 경기<input id="editTotalGames" type="number" min="0"></label>
         <label>승리<input id="editTotalWins" type="number" min="0"></label>
+        <label>코발트 점수<input id="editCobaltRating" type="number" min="0"></label>
+        <label>코발트 포지션
+          <select id="editCobaltPosition">
+            <option value="">선택 안 함</option>
+            <option value="front">앞라인 / 이니시</option>
+            <option value="skirmish">교전 / 브루저</option>
+            <option value="carry">딜러 / 캐리</option>
+            <option value="support">서포터 / 유틸</option>
+          </select>
+        </label>
         <label>1순위 역할<select id="editRole1"></select></label>
         <label>2순위 역할<select id="editRole2"></select></label>
         <label>3순위 역할<select id="editRole3"></select></label>
@@ -480,6 +529,7 @@
       <label>모스트 실험체 (쉼표로 구분)
         <input id="editMost" placeholder="예: 수아, 레니, 일레븐">
       </label>
+      <label>코발트 선호 실험체·무기<input id="editCobaltPicks" placeholder="예: 아야 권총, 헤이즈"></label>
       <label>메모<input id="editMemo"></label>
       <button class="primary" type="submit"><i data-lucide="save"></i> 수정 저장</button>
     </form>
@@ -614,8 +664,8 @@
 
   <script src="./config.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="./cloud.js?v=20260621-2"></script>
+  <script src="./cloud.js?v=20260623-1"></script>
   <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
-  <script src="./app.js?v=20260621-5"></script>
+  <script src="./app.js?v=20260623-1"></script>
 </body>
 </html>

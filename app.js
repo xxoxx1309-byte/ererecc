@@ -134,6 +134,12 @@ const DEFAULT_SCORE_RULE = {
   lateKill: 1,
   penaltyDeath: 1
 };
+const COBALT_POSITIONS = {
+  front: "앞라인",
+  skirmish: "교전",
+  carry: "딜러",
+  support: "서포터"
+};
 const OTP_COOLDOWN_MS = 60_000;
 const OTP_EMAIL_KEY = "er-admin-otp-email";
 const OTP_SENT_AT_KEY = "er-admin-otp-sent-at";
@@ -279,6 +285,9 @@ function sanitizeStateRelations(target) {
     applicant.nickname = String(applicant.nickname).trim();
     applicant.currentMmr = Number(applicant.currentMmr ?? applicant.mmr ?? 0);
     applicant.peakMmr = Number(applicant.peakMmr ?? applicant.mmr ?? 0);
+    applicant.cobaltRating = Number(applicant.cobaltRating || 0);
+    applicant.cobaltPosition = COBALT_POSITIONS[applicant.cobaltPosition] ? applicant.cobaltPosition : "";
+    applicant.cobaltPicks = String(applicant.cobaltPicks || "").trim();
     applicant.roles = [...new Set(Array.isArray(applicant.roles) ? applicant.roles.filter((role) => ROLES.includes(role)) : [])].slice(0, 3);
     return true;
   });
@@ -1183,6 +1192,9 @@ async function submitApplicant(event) {
     totalWins: rankCache?.totalWins || 0,
     most: rankCache?.most || [],
     mostStats: rankCache?.mostStats || [],
+    cobaltRating: Number($("#cobaltRating").value || 0),
+    cobaltPosition: $("#cobaltPosition").value,
+    cobaltPicks: $("#cobaltPicks").value.trim(),
     memo: $("#memo").value.trim(),
     createdAt: new Date().toISOString()
   };
@@ -1221,6 +1233,10 @@ function resetForm() {
 }
 
 function makeTeams() {
+  makeRankTeams();
+}
+
+function makeRankTeams() {
   readTeamControls();
   const { desiredTeams, teamSize } = state.settings;
   if (state.applicants.length < desiredTeams) return toast("팀 수보다 참가자가 적습니다.");
@@ -1245,6 +1261,65 @@ function makeTeams() {
   normalizeScores();
   saveState();
   toast(`${state.teams.length}개 팀을 편성했습니다.`);
+}
+
+function cobaltScore(player) {
+  return Number(player?.cobaltRating || 0) || applicantMmr(player);
+}
+
+function cobaltPosition(player) {
+  if (COBALT_POSITIONS[player?.cobaltPosition]) return player.cobaltPosition;
+  const primary = player?.roles?.[0] || "";
+  if (primary.includes("탱커")) return "front";
+  if (primary.includes("서포터")) return "support";
+  if (primary.includes("원딜")) return "carry";
+  return "skirmish";
+}
+
+function teamCobaltScore(team) {
+  return team.members.reduce((sum, id) => sum + cobaltScore(getApplicant(id)), 0);
+}
+
+function makeCobaltTeams() {
+  state.settings.desiredTeams = 2;
+  state.settings.teamSize = 4;
+  $("#desiredTeams").value = 2;
+  $("#teamSize").value = 4;
+  readTeamControls();
+  if (state.applicants.length < 8) return toast("코발트 편성은 최소 8명이 필요합니다.");
+
+  const sorted = state.applicants
+    .slice()
+    .sort((a, b) => cobaltScore(b) - cobaltScore(a))
+    .slice(0, 8);
+  const teams = [0, 1].map((index) => ({
+    id: crypto.randomUUID(),
+    name: `${index + 1}팀`,
+    members: [],
+    cobaltPositions: { front: 0, skirmish: 0, carry: 0, support: 0 }
+  }));
+
+  sorted.forEach((player) => {
+    const position = cobaltPosition(player);
+    const candidates = teams
+      .filter((team) => team.members.length < 4)
+      .map((team) => {
+        const nextScore = teamCobaltScore(team) + cobaltScore(player);
+        const positionPenalty = (team.cobaltPositions[position] || 0) * 220;
+        const sizePenalty = team.members.length * 30;
+        return { team, value: nextScore + positionPenalty + sizePenalty };
+      })
+      .sort((a, b) => a.value - b.value);
+    const target = candidates[0]?.team || teams[0];
+    target.members.push(player.id);
+    target.cobaltPositions[position] = (target.cobaltPositions[position] || 0) + 1;
+  });
+
+  state.teams = teams.map(({ cobaltPositions, ...team }) => team);
+  state.captains = {};
+  normalizeScores();
+  saveState();
+  toast("코발트 4v4 기준으로 2개 팀을 편성했습니다.");
 }
 
 function readTeamControls() {
@@ -1290,6 +1365,7 @@ function teamTotal(teamId) {
 
 function renderTeams() {
   $("#teamCount").textContent = state.teams.length;
+  renderTeamMakerGuide();
   renderDraftBoard();
   renderTailRuleBoard();
   renderWeaponRuleBoard();
@@ -1303,9 +1379,12 @@ function renderTeams() {
       const captain = state.captains[team.id] === player.id;
       const name = player.discordName ? `${player.discordName} (${player.nickname})` : player.nickname;
       const roleOrder = (player.roles || []).map((role, roleIndex) => `${roleIndex + 1}. ${role}`).join(" / ");
+      const cobaltInfo = player.cobaltRating || player.cobaltPosition
+        ? ` · 코발트 ${player.cobaltRating ? formatNumber(player.cobaltRating) : formatNumber(cobaltScore(player))}${player.cobaltPosition ? ` · ${COBALT_POSITIONS[player.cobaltPosition]}` : ""}`
+        : "";
       return `<li class="team-member-row${captain ? " captain" : " draggable"}" data-team-member="${team.id}|${player.id}" draggable="${captain ? "false" : "true"}">
         <div>${captain ? "팀장 · " : ""}${escapeHtml(name)}<span class="role-tag">${escapeHtml(player.roles?.[0] || "-")}</span></div>
-        <small>${state.settings.mmrBasis === "peak" ? "최고" : "현재"} MMR ${formatNumber(applicantMmr(player))} · ${escapeHtml(roleOrder || "역할군 미지정")}</small>
+        <small>${state.settings.mmrBasis === "peak" ? "최고" : "현재"} MMR ${formatNumber(applicantMmr(player))} · ${escapeHtml(roleOrder || "역할군 미지정")}${cobaltInfo}</small>
       </li>`;
     }).join("");
     return `<article class="team-card" data-drop-team="${team.id}"><header><span>${team.name}</span><span>합계 ${formatNumber(totalMmr)}</span></header><ol>${members}</ol></article>`;
@@ -1324,6 +1403,22 @@ function renderTeams() {
     ? `<p class="team-drag-help">미배정 인원을 팀 카드로 드래그해 직접 구성하세요. 팀원끼리 놓으면 교체되고, 미배정 칸으로 되돌릴 수도 있습니다. 팀장은 고정됩니다.</p>${unassignedPool}${cards}`
     : `<p class="note">참가자를 등록한 뒤 자동 편성을 실행하세요.</p>`;
   renderCaptains();
+}
+
+function renderTeamMakerGuide() {
+  const guide = $("#teamMakerGuide");
+  if (!guide) return;
+  const cobaltReady = state.applicants.filter((player) => Number(player.cobaltRating || 0) || player.cobaltPosition || player.cobaltPicks).length;
+  const missingMmr = state.applicants.filter((player) => !applicantMmr(player)).length;
+  guide.innerHTML = `
+    <div>
+      <strong>랭크 기준</strong>
+      <span>${state.settings.mmrBasis === "peak" ? "최근 최고 MMR" : "현재 시즌 MMR"} · ${missingMmr ? `MMR 미입력 ${missingMmr}명` : "MMR 준비됨"}</span>
+    </div>
+    <div>
+      <strong>코발트 기준</strong>
+      <span>4v4 · 코발트 양식 입력 ${cobaltReady}/${state.applicants.length}명 · 미입력자는 MMR로 보정</span>
+    </div>`;
 }
 
 function tailRuleTeams() {
@@ -1614,11 +1709,21 @@ function renderApplicants() {
       <td>${player.rank ? `${formatNumber(player.rank)}위` : "-"}</td>
       <td>${formatWinRate(player.totalWins, player.totalGames)}</td>
       <td><div class="roster-most">${renderRosterMost(player)}</div></td>
+      <td>${renderCobaltApplicantSummary(player)}</td>
       <td><div class="roster-actions">
         <button class="secondary" data-edit-applicant="${player.id}" type="button" aria-label="${escapeHtml(player.nickname)} 수정"><i data-lucide="pencil"></i></button>
         <button class="danger" data-remove="${player.id}" type="button" aria-label="${escapeHtml(player.nickname)} 삭제"><i data-lucide="trash-2"></i></button>
       </div></td>
-    </tr>`).join("") || `<tr><td colspan="9">등록된 참가자가 없습니다.</td></tr>`;
+    </tr>`).join("") || `<tr><td colspan="10">등록된 참가자가 없습니다.</td></tr>`;
+}
+
+function renderCobaltApplicantSummary(player) {
+  const parts = [
+    player.cobaltRating ? `점수 ${formatNumber(player.cobaltRating)}` : "",
+    player.cobaltPosition ? COBALT_POSITIONS[player.cobaltPosition] : "",
+    player.cobaltPicks ? escapeHtml(player.cobaltPicks) : ""
+  ].filter(Boolean);
+  return parts.length ? `<small>${parts.join("<br>")}</small>` : "-";
 }
 
 function renderPublicRoster() {
@@ -1650,6 +1755,9 @@ function openApplicantEditor(applicantId) {
   $("#editRank").value = Number(player.rank || 0);
   $("#editTotalGames").value = Number(player.totalGames || 0);
   $("#editTotalWins").value = Number(player.totalWins || 0);
+  $("#editCobaltRating").value = Number(player.cobaltRating || 0) || "";
+  $("#editCobaltPosition").value = player.cobaltPosition || "";
+  $("#editCobaltPicks").value = player.cobaltPicks || "";
   $("#editMemo").value = player.memo || "";
   const displayedMost = (player.mostStats || []).length
     ? player.mostStats.map(characterNameForStat)
@@ -1685,6 +1793,9 @@ async function saveApplicantEdit(event) {
     rank: Math.max(0, Number($("#editRank").value || 0)),
     totalGames,
     totalWins,
+    cobaltRating: Math.max(0, Number($("#editCobaltRating").value || 0)),
+    cobaltPosition: $("#editCobaltPosition").value,
+    cobaltPicks: $("#editCobaltPicks").value.trim(),
     roles,
     most,
     mostStats: most.join("|") === previousMost.join("|") ? (player.mostStats || []) : [],
@@ -2216,6 +2327,8 @@ function bindEvents() {
   });
   $("#resetForm").addEventListener("click", resetForm);
   $("#makeTeams").addEventListener("click", makeTeams);
+  $("#makeRankTeams").addEventListener("click", makeRankTeams);
+  $("#makeCobaltTeams").addEventListener("click", makeCobaltTeams);
   $("#clearTeams").addEventListener("click", () => {
     state.teams = [];
     state.captains = {};

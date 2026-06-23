@@ -537,6 +537,91 @@ input:focus, select:focus, textarea:focus {
 
 .team-controls p { align-self: center; color: var(--subtle); font-size: 12px; font-weight: 520; }
 
+.team-maker-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0 0 12px;
+}
+
+.team-maker-tabs article {
+  display: grid;
+  align-content: space-between;
+  gap: 10px;
+  min-height: 136px;
+  padding: 14px;
+  background: #fffaf0;
+  border: 1px solid #ead8a2;
+  border-radius: 7px;
+}
+
+.team-maker-tabs strong {
+  font-family: var(--heading);
+  font-size: 17px;
+  color: var(--ink);
+}
+
+.team-maker-tabs p {
+  color: var(--subtle);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.team-maker-guide {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.team-maker-guide div {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+}
+
+.team-maker-guide strong {
+  font-family: var(--heading);
+  font-size: 13px;
+}
+
+.team-maker-guide span {
+  color: var(--subtle);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.cobalt-apply-box {
+  padding: 12px;
+  background: #fffaf0;
+  border: 1px solid #ead8a2;
+  border-radius: 7px;
+}
+
+.cobalt-apply-box summary {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--ink);
+  font-family: var(--heading);
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.cobalt-apply-box summary svg {
+  width: 17px;
+  height: 17px;
+  color: var(--rose);
+}
+
+.cobalt-apply-box[open] {
+  display: grid;
+  gap: 12px;
+}
+
 .draft-helper {
   display: grid;
   gap: 12px;
@@ -1091,6 +1176,7 @@ legend { padding: 0 7px; font-size: 15px; }
   .event-facts { grid-template-columns: repeat(3, 1fr); }
   .notice-grid { grid-template-columns: repeat(2, 1fr); }
   .draft-board { grid-template-columns: 1fr; }
+  .team-maker-tabs, .team-maker-guide { grid-template-columns: 1fr; }
   .draft-columns { grid-template-columns: 1fr; }
   .draft-team-status, .match-record-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .cloud-backup-row { grid-template-columns: 1fr 1fr; }
