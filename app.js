@@ -1417,7 +1417,7 @@ function renderTeamMakerGuide() {
     </div>
     <div>
       <strong>코발트 기준</strong>
-      <span>4v4 · 코발트 양식 입력 ${cobaltReady}/${state.applicants.length}명 · 미입력자는 MMR로 보정</span>
+      <span>총 8명 4v4 · 코발트 양식 입력 ${cobaltReady}/${state.applicants.length}명 · 미입력자는 MMR로 보정</span>
     </div>`;
 }
 
@@ -2224,10 +2224,7 @@ function bindEvents() {
     event.preventDefault();
     if (!cloudOperator) return toast("등록된 운영자만 내전을 만들 수 있습니다.");
     const name = $("#newEventName").value.trim();
-    const enteredSlug = $("#newEventSlug").value.trim().toLowerCase();
-    const slug = /^[a-z0-9][a-z0-9-]{2,39}$/.test(enteredSlug)
-      ? enteredSlug
-      : `match-${new Date().toISOString().slice(0, 10).replaceAll("-", "")}-${crypto.randomUUID().slice(0, 6)}`;
+    const slug = `match-${new Date().toISOString().slice(0, 10).replaceAll("-", "")}-${crypto.randomUUID().slice(0, 6)}`;
     const button = $("#createCloudEventButton");
     setCloudCreateError();
     button.disabled = true;
