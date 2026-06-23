@@ -804,7 +804,7 @@ function scheduleCloudSave() {
 function bindSettings() {
   $("#eventName").value = state.settings.eventName;
   $("#apiKey").value = state.settings.apiKey || "";
-  $("#teamMode").value = String(state.settings.teamMode || 3);
+  $("#teamMode").value = String(isCobaltEvent() ? 4 : state.settings.teamMode || 3);
   $("#matchCount").value = state.settings.matchCount;
   $("#desiredTeams").value = state.settings.desiredTeams || 8;
   $("#teamSize").value = state.settings.teamSize || 3;
@@ -834,16 +834,20 @@ function readSettings() {
     .filter(Number.isFinite)
     .slice(0, 8);
 
+  const selectedTeamMode = Number($("#teamMode").value || 3);
+  const cobaltMode = selectedTeamMode === 4;
+
   state.settings = {
     ...state.settings,
     eventName: $("#eventName").value.trim() || "이터널 리턴 내전",
     apiKey: $("#apiKey").value.trim(),
     apiBase: API_BASE,
     seasonId: Number($("#seasonId").value || state.settings.seasonId || DEFAULT_SEASON_ID),
-    teamMode: Number($("#teamMode").value || 3),
+    eventType: cobaltMode ? "cobalt" : "normal",
+    teamMode: selectedTeamMode,
     matchCount: Math.min(12, Math.max(1, Number($("#matchCount").value || 4))),
-    desiredTeams: Math.min(12, Math.max(2, Number($("#desiredTeams").value || 8))),
-    teamSize: Math.min(4, Math.max(1, Number($("#teamSize").value || 3))),
+    desiredTeams: cobaltMode ? 2 : Math.min(12, Math.max(2, Number($("#desiredTeams").value || 8))),
+    teamSize: cobaltMode ? 4 : Math.min(4, Math.max(1, Number($("#teamSize").value || 3))),
     mmrBasis: $("#mmrBasis").value === "peak" ? "peak" : "current",
     tailChaseEnabled: $("#tailChaseEnabled").checked,
     weaponGroupEnabled: $("#weaponGroupEnabled").checked,
@@ -860,8 +864,8 @@ function readSettings() {
     host: $("#eventHost").value.trim(),
     time: $("#eventTime").value.trim(),
     tierLimit: $("#tierLimit").value.trim(),
-    teamFormat: $("#teamFormat").value.trim(),
-    capacity: $("#capacity").value.trim(),
+    teamFormat: cobaltMode ? ($("#teamFormat").value.trim() || "코발트 4v4") : $("#teamFormat").value.trim(),
+    capacity: cobaltMode ? ($("#capacity").value.trim() || "8명") : $("#capacity").value.trim(),
     rules: $("#eventRules").value.trim()
   };
   syncMatchArrays();
@@ -2260,6 +2264,7 @@ function bindEvents() {
       seed.settings.eventName = name;
       seed.settings.eventType = eventType;
       if (eventType === "cobalt") {
+        seed.settings.teamMode = 4;
         seed.settings.desiredTeams = 2;
         seed.settings.teamSize = 4;
         seed.eventInfo.teamFormat = "코발트 4v4";
