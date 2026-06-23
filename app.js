@@ -185,6 +185,7 @@ function defaultState() {
     version: STATE_VERSION,
     settings: {
       eventName: "이터널 리턴 내전",
+      eventType: "normal",
       apiKey: "",
       apiBase: API_BASE,
       seasonId: DEFAULT_SEASON_ID,
@@ -251,6 +252,7 @@ function normalizeState(saved, isLegacy = false) {
       ...(saved.settings?.scoreRule || {})
     }
   };
+  settings.eventType = settings.eventType === "cobalt" ? "cobalt" : "normal";
   const normalized = { ...base, ...saved, version: STATE_VERSION, settings };
   normalized.applicants = Array.isArray(saved.applicants) ? saved.applicants : [];
   normalized.eventInfo = { ...base.eventInfo, ...(saved.eventInfo || {}) };
@@ -593,9 +595,13 @@ function updateApplicationAvailability() {
   const open = cloudEvent.registration_open !== false;
   status.className = `cloud-apply-status ${open ? "ok" : "closed"}`;
   status.textContent = open
-    ? `${cloudEvent.name} · 실시간 신청 접수 중`
+    ? `${cloudEvent.name} · ${isCobaltEvent() ? "코발트 신청" : "실시간 신청"} 접수 중`
     : `${cloudEvent.name} · 신청이 마감되었습니다.`;
   submit.disabled = !open;
+}
+
+function isCobaltEvent() {
+  return state.settings.eventType === "cobalt";
 }
 
 function applyCloudState(event, applicants = []) {
@@ -971,6 +977,20 @@ function renderRoles() {
     : "<span>3개를 순서대로 선택하세요</span>";
 }
 
+function renderApplyMode() {
+  const cobalt = isCobaltEvent();
+  $("#lookupRank").hidden = cobalt;
+  $("#roleApplyBlock").hidden = cobalt;
+  $("#manualApplyBlock").hidden = cobalt;
+  $("#cobaltApplyBox").hidden = true;
+  $("#rankApplyPanel").hidden = cobalt;
+  $(".registration-panel .section-number").textContent = cobalt ? "COBALT" : "01";
+  $(".registration-panel h2").textContent = cobalt ? "코발트 참가 등록" : "참가자 등록";
+  $("#nickname").placeholder = cobalt ? "인게임 닉네임" : "닉네임을 정확히 입력";
+  $("#discordName").placeholder = cobalt ? "디스코드 닉네임" : "선택 입력";
+  $("#submitApplicant").innerHTML = `<i data-lucide="user-plus"></i> ${cobalt ? "코발트 참가 등록" : "참가자 등록"}`;
+}
+
 function toggleRole(role) {
   if (selectedRoles.includes(role)) selectedRoles = selectedRoles.filter((item) => item !== role);
   else if (selectedRoles.length < 3) selectedRoles.push(role);
@@ -1167,8 +1187,10 @@ async function syncMissingApplicantRanks() {
 async function submitApplicant(event) {
   event.preventDefault();
   const nickname = $("#nickname").value.trim();
-  if (!nickname || selectedRoles.length !== 3) return toast("닉네임과 역할군 3개를 모두 입력해 주세요.");
-  const canLookup = Boolean((cloud?.configured && cloudEvent) || state.settings.apiKey);
+  const cobalt = isCobaltEvent();
+  if (!nickname) return toast("인게임 닉네임을 입력해 주세요.");
+  if (!cobalt && selectedRoles.length !== 3) return toast("닉네임과 역할군 3개를 모두 입력해 주세요.");
+  const canLookup = !cobalt && Boolean((cloud?.configured && cloudEvent) || state.settings.apiKey);
   const cachedNickname = String(rankCache?.nickname || "").trim().toLowerCase();
   if (canLookup && cachedNickname !== nickname.toLowerCase()) {
     const submitButton = $("#submitApplicant");
@@ -1181,7 +1203,7 @@ async function submitApplicant(event) {
     id: crypto.randomUUID(),
     nickname,
     discordName: $("#discordName").value.trim(),
-    roles: [...selectedRoles],
+    roles: cobalt ? [] : [...selectedRoles],
     userId: rankCache?.userId || null,
     mmr: Number($("#manualMmr").value || rankCache?.mmr || 0),
     currentMmr: Number($("#manualMmr").value || rankCache?.currentMmr || rankCache?.mmr || 0),
@@ -1192,9 +1214,9 @@ async function submitApplicant(event) {
     totalWins: rankCache?.totalWins || 0,
     most: rankCache?.most || [],
     mostStats: rankCache?.mostStats || [],
-    cobaltRating: Number($("#cobaltRating").value || 0),
-    cobaltPosition: $("#cobaltPosition").value,
-    cobaltPicks: $("#cobaltPicks").value.trim(),
+    cobaltRating: 0,
+    cobaltPosition: "",
+    cobaltPicks: "",
     memo: $("#memo").value.trim(),
     createdAt: new Date().toISOString()
   };
@@ -1229,6 +1251,7 @@ function resetForm() {
   $("#rankPreview").className = "rank-empty";
   $("#rankPreview").innerHTML = `<i data-lucide="scan-search"></i><strong>랭크 조회는 선택입니다</strong><p>API 키가 없어도 닉네임과 역할군만으로 신청할 수 있습니다.</p>`;
   renderRoles();
+  renderApplyMode();
   refreshIcons();
 }
 
@@ -1879,6 +1902,7 @@ function render() {
   renderNotice();
   renderHouseRulesSummary();
   renderRoles();
+  renderApplyMode();
   renderTeams();
   renderScores();
   renderApplicants();
@@ -2224,6 +2248,7 @@ function bindEvents() {
     event.preventDefault();
     if (!cloudOperator) return toast("등록된 운영자만 내전을 만들 수 있습니다.");
     const name = $("#newEventName").value.trim();
+    const eventType = $("#newEventType").value === "cobalt" ? "cobalt" : "normal";
     const slug = `match-${new Date().toISOString().slice(0, 10).replaceAll("-", "")}-${crypto.randomUUID().slice(0, 6)}`;
     const button = $("#createCloudEventButton");
     setCloudCreateError();
@@ -2233,6 +2258,13 @@ function bindEvents() {
     try {
       const seed = defaultState();
       seed.settings.eventName = name;
+      seed.settings.eventType = eventType;
+      if (eventType === "cobalt") {
+        seed.settings.desiredTeams = 2;
+        seed.settings.teamSize = 4;
+        seed.eventInfo.teamFormat = "코발트 4v4";
+        seed.eventInfo.capacity = "8명";
+      }
       const created = await cloud.createEvent({ ownerId: cloudSession.user.id, name, slug, state: seed });
       $("#createEventForm").reset();
       cloudCreateOpen = false;

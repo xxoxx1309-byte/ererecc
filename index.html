@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#fffdf8">
   <title>이터널 리턴 내전 계산기</title>
   <link rel="icon" type="image/svg+xml" href="./favicon.svg">
-  <link rel="stylesheet" href="./style.css?v=20260623-3">
+  <link rel="stylesheet" href="./style.css?v=20260623-4">
 </head>
 <body>
   <header class="topbar">
@@ -154,6 +154,12 @@
           <label>내전 이름
             <input id="newEventName" maxlength="60" required placeholder="예: 6월 무기군 내전">
           </label>
+          <label>내전 종류
+            <select id="newEventType">
+              <option value="normal">일반 내전</option>
+              <option value="cobalt">코발트 내전</option>
+            </select>
+          </label>
           <button class="primary" id="createCloudEventButton" type="submit">
             <i data-lucide="check"></i> 생성
           </button>
@@ -246,7 +252,7 @@
         <div id="cloudApplyStatus" class="cloud-apply-status" hidden></div>
 
         <form id="applicantForm" class="applicant-form">
-          <div class="lookup-row">
+          <div class="lookup-row" id="rankLookupRow">
             <label>인게임 닉네임
               <input id="nickname" required autocomplete="off" placeholder="닉네임을 정확히 입력">
             </label>
@@ -259,14 +265,14 @@
             <input id="discordName" autocomplete="off" placeholder="선택 입력">
           </label>
 
-          <div>
+          <div id="roleApplyBlock">
             <p class="field-title">역할군 우선순위</p>
             <p class="field-help">가장 자신 있는 역할부터 1·2·3순위로 선택하세요.</p>
             <div id="roleButtons" class="role-grid"></div>
             <div id="roleOrder" class="role-order"></div>
           </div>
 
-          <div class="form-grid">
+          <div class="form-grid" id="manualApplyBlock">
             <label>수동 MMR
               <input id="manualMmr" type="number" min="0" placeholder="조회 실패 시">
             </label>
@@ -275,7 +281,7 @@
             </label>
           </div>
 
-          <details class="cobalt-apply-box">
+          <details class="cobalt-apply-box" id="cobaltApplyBox">
             <summary><i data-lucide="zap"></i> 코발트 내전 양식</summary>
             <div class="form-grid">
               <label>코발트 기준 점수
@@ -303,7 +309,7 @@
         </form>
       </article>
 
-      <aside class="panel rank-panel">
+      <aside class="panel rank-panel" id="rankApplyPanel">
         <div class="section-head">
           <div>
             <p class="section-number">LIVE</p>
@@ -661,8 +667,8 @@
 
   <script src="./config.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="./cloud.js?v=20260623-3"></script>
+  <script src="./cloud.js?v=20260623-4"></script>
   <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
-  <script src="./app.js?v=20260623-3"></script>
+  <script src="./app.js?v=20260623-4"></script>
 </body>
 </html>
