@@ -474,6 +474,7 @@ function clearOtpStep(renderAfter = true) {
 
 function friendlyAuthError(error) {
   const message = String(error?.message || "");
+  if (/failed to fetch|network|resolve|dns|load failed/i.test(message)) return "Supabase 서버에 연결할 수 없습니다. 프로젝트가 일시정지되어 있으면 Supabase 대시보드에서 Resume project를 먼저 눌러 주세요.";
   if (/rate limit|security purposes|after \d+ seconds/i.test(message)) return "인증번호는 60초 후 다시 요청할 수 있습니다.";
   if (/expired|invalid|token/i.test(message)) return "인증번호가 틀렸거나 만료되었습니다. 새 번호를 요청해 주세요.";
   return message || "인증 처리에 실패했습니다. 잠시 후 다시 시도해 주세요.";
@@ -483,7 +484,7 @@ function friendlyCloudError(error) {
   const message = String(error?.message || "");
   if (/row-level security|permission denied|jwt|session/i.test(message)) return "관리자 로그인이 만료되었습니다. 다시 로그인해 주세요.";
   if (/duplicate|unique/i.test(message) || error?.code === "23505") return "신청 주소가 겹쳤습니다. 새 내전을 한 번 더 생성해 주세요.";
-  if (/failed to fetch|network/i.test(message)) return "서버에 연결하지 못했습니다. 잠시 후 다시 시도해 주세요.";
+  if (/failed to fetch|network|resolve|dns|load failed/i.test(message)) return "Supabase 서버에 연결할 수 없습니다. 프로젝트가 일시정지되어 있으면 Supabase 대시보드에서 Resume project를 먼저 눌러 주세요.";
   return message || "내전을 생성하지 못했습니다. 잠시 후 다시 시도해 주세요.";
 }
 
