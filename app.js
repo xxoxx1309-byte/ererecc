@@ -196,6 +196,7 @@ function defaultState() {
       mmrBasis: "current",
       tailChaseEnabled: false,
       weaponGroupEnabled: false,
+      peerlessEnabled: false,
       tournamentScoring: true,
       scoreRule: structuredClone(DEFAULT_SCORE_RULE)
     },
@@ -290,6 +291,7 @@ function sanitizeStateRelations(target) {
     applicant.cobaltRating = Number(applicant.cobaltRating || 0);
     applicant.cobaltPosition = COBALT_POSITIONS[applicant.cobaltPosition] ? applicant.cobaltPosition : "";
     applicant.cobaltPicks = String(applicant.cobaltPicks || "").trim();
+    applicant.playableCharacters = normalizeCharacterList(applicant.playableCharacters || []);
     applicant.roles = [...new Set(Array.isArray(applicant.roles) ? applicant.roles.filter((role) => ROLES.includes(role)) : [])].slice(0, 3);
     return true;
   });
@@ -813,6 +815,7 @@ function bindSettings() {
   $("#draftCaptainMode").value = state.draft?.captainMode || "high";
   $("#tailChaseEnabled").checked = state.settings.tailChaseEnabled === true;
   $("#weaponGroupEnabled").checked = state.settings.weaponGroupEnabled === true;
+  $("#peerlessEnabled").checked = state.settings.peerlessEnabled === true;
   $("#tournamentScoring").checked = state.settings.tournamentScoring !== false;
   $("#placementPoints").value = currentScoreRule().placement.join(",");
   $("#day1KillPoint").value = currentScoreRule().day1Kill;
@@ -852,6 +855,7 @@ function readSettings() {
     mmrBasis: $("#mmrBasis").value === "peak" ? "peak" : "current",
     tailChaseEnabled: $("#tailChaseEnabled").checked,
     weaponGroupEnabled: $("#weaponGroupEnabled").checked,
+    peerlessEnabled: $("#peerlessEnabled").checked,
     tournamentScoring: $("#tournamentScoring").checked,
     scoreRule: {
       placement: placement.length === 8 ? placement : [...DEFAULT_SCORE_RULE.placement],
@@ -869,6 +873,7 @@ function readSettings() {
     capacity: cobaltMode ? ($("#capacity").value.trim() || "8명") : $("#capacity").value.trim(),
     rules: $("#eventRules").value.trim()
   };
+  if (state.settings.peerlessEnabled) state.settings.matchCount = 3;
   syncMatchArrays();
 }
 
@@ -878,6 +883,25 @@ function currentScoreRule() {
 
 function placementPoints() {
   return Object.fromEntries(currentScoreRule().placement.map((point, index) => [index + 1, point]));
+}
+
+function normalizeCharacterName(name) {
+  return String(name || "").trim().replace(/\s+/g, "").toLowerCase();
+}
+
+function normalizeCharacterList(value) {
+  const list = Array.isArray(value)
+    ? value
+    : String(value || "").split(/[,\n/]+/);
+  const seen = new Set();
+  return list
+    .map((name) => String(name || "").trim())
+    .filter((name) => {
+      const key = normalizeCharacterName(name);
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
 }
 
 async function erFetch(path) {
@@ -984,9 +1008,11 @@ function renderRoles() {
 
 function renderApplyMode() {
   const cobalt = isCobaltEvent();
+  const peerless = state.settings.peerlessEnabled === true && !cobalt;
   $("#lookupRank").hidden = cobalt;
   $("#roleApplyBlock").hidden = cobalt;
   $("#manualApplyBlock").hidden = cobalt;
+  $("#peerlessApplyBox").hidden = !peerless;
   $("#cobaltApplyBox").hidden = true;
   $("#rankApplyPanel").hidden = cobalt;
   $(".registration-panel .section-number").textContent = cobalt ? "COBALT" : "01";
@@ -1193,8 +1219,10 @@ async function submitApplicant(event) {
   event.preventDefault();
   const nickname = $("#nickname").value.trim();
   const cobalt = isCobaltEvent();
+  const playableCharacters = normalizeCharacterList($("#playableCharacters")?.value || "");
   if (!nickname) return toast("인게임 닉네임을 입력해 주세요.");
   if (!cobalt && selectedRoles.length !== 3) return toast("닉네임과 역할군 3개를 모두 입력해 주세요.");
+  if (!cobalt && state.settings.peerlessEnabled && playableCharacters.length < 5) return toast("피어리스 내전은 플레이 가능한 실험체를 5명 이상 입력해 주세요.");
   const canLookup = !cobalt && Boolean((cloud?.configured && cloudEvent) || state.settings.apiKey);
   const cachedNickname = String(rankCache?.nickname || "").trim().toLowerCase();
   if (canLookup && cachedNickname !== nickname.toLowerCase()) {
@@ -1219,6 +1247,7 @@ async function submitApplicant(event) {
     totalWins: rankCache?.totalWins || 0,
     most: rankCache?.most || [],
     mostStats: rankCache?.mostStats || [],
+    playableCharacters,
     cobaltRating: 0,
     cobaltPosition: "",
     cobaltPicks: "",
@@ -1628,6 +1657,7 @@ function renderScores() {
   renderReplayCodes();
   renderScoreSummary();
   renderMatchCards();
+  renderPeerlessBoard();
   renderBanBoard();
   renderRoundBanSummary();
   renderBanSummary();
@@ -1680,6 +1710,73 @@ function renderMatchCards() {
     });
     board.appendChild(template);
   });
+}
+
+function peerlessPickFor(matchIndex, teamId, playerId) {
+  return String(state.scores[matchIndex]?.[teamId]?.usedCharacters?.[playerId] || "").trim();
+}
+
+function previousPeerlessPick(playerId, characterName, beforeMatchIndex) {
+  const key = normalizeCharacterName(characterName);
+  if (!key) return null;
+  for (let matchIndex = 0; matchIndex < beforeMatchIndex; matchIndex += 1) {
+    const match = state.scores[matchIndex] || {};
+    for (const team of state.teams) {
+      const picked = match[team.id]?.usedCharacters?.[playerId];
+      if (normalizeCharacterName(picked) === key) return { matchIndex, teamName: team.name };
+    }
+  }
+  return null;
+}
+
+function renderPeerlessBoard() {
+  const board = $("#peerlessBoard");
+  if (!board) return;
+  if (state.settings.peerlessEnabled !== true) {
+    board.innerHTML = "";
+    return;
+  }
+  if (!state.teams.length) {
+    board.innerHTML = `<p class="note">팀을 편성하면 피어리스 사용 실험체표가 표시됩니다.</p>`;
+    return;
+  }
+  const matchCount = Math.min(3, state.scores.length);
+  const rows = [];
+  state.teams.forEach((team) => {
+    team.members.forEach((playerId) => {
+      const player = getApplicant(playerId);
+      if (!player) return;
+      const cells = Array.from({ length: matchCount }, (_, matchIndex) => {
+        const value = peerlessPickFor(matchIndex, team.id, player.id);
+        const repeated = previousPeerlessPick(player.id, value, matchIndex);
+        return `<td>
+          <input class="${repeated ? "duplicate" : ""}" data-peerless="${matchIndex}:${team.id}:${player.id}" value="${escapeHtml(value)}" placeholder="실험체">
+          ${repeated ? `<small class="duplicate-warning">${repeated.matchIndex + 1}경기 중복</small>` : ""}
+        </td>`;
+      }).join("");
+      rows.push(`<tr>
+        <th>${escapeHtml(team.name)}</th>
+        <td><strong>${escapeHtml(player.nickname)}</strong><br><small>${escapeHtml((player.playableCharacters || []).join(" / ") || "신청 실험체 없음")}</small></td>
+        ${cells}
+      </tr>`);
+    });
+  });
+  board.innerHTML = `
+    <section class="peerless-panel">
+      <div class="peerless-head">
+        <div>
+          <h3>피어리스 사용 실험체표</h3>
+          <p>이전 경기에서 사용한 실험체를 다시 입력하면 중복 경고가 표시됩니다.</p>
+        </div>
+        <span>3경기 합산</span>
+      </div>
+      <div class="table-wrap">
+        <table class="sheet-table peerless-table">
+          <thead><tr><th>팀</th><th>참가자 · 신청 실험체</th>${Array.from({ length: matchCount }, (_, index) => `<th>${index + 1}경기</th>`).join("")}</tr></thead>
+          <tbody>${rows.join("")}</tbody>
+        </table>
+      </div>
+    </section>`;
 }
 
 function renderBanBoard() {
@@ -1737,12 +1834,13 @@ function renderApplicants() {
       <td>${player.rank ? `${formatNumber(player.rank)}위` : "-"}</td>
       <td>${formatWinRate(player.totalWins, player.totalGames)}</td>
       <td><div class="roster-most">${renderRosterMost(player)}</div></td>
+      <td>${escapeHtml((player.playableCharacters || []).join(" / ") || "-")}</td>
       <td>${renderCobaltApplicantSummary(player)}</td>
       <td><div class="roster-actions">
         <button class="secondary" data-edit-applicant="${player.id}" type="button" aria-label="${escapeHtml(player.nickname)} 수정"><i data-lucide="pencil"></i></button>
         <button class="danger" data-remove="${player.id}" type="button" aria-label="${escapeHtml(player.nickname)} 삭제"><i data-lucide="trash-2"></i></button>
       </div></td>
-    </tr>`).join("") || `<tr><td colspan="10">등록된 참가자가 없습니다.</td></tr>`;
+    </tr>`).join("") || `<tr><td colspan="11">등록된 참가자가 없습니다.</td></tr>`;
 }
 
 function renderCobaltApplicantSummary(player) {
@@ -1786,6 +1884,7 @@ function openApplicantEditor(applicantId) {
   $("#editCobaltRating").value = Number(player.cobaltRating || 0) || "";
   $("#editCobaltPosition").value = player.cobaltPosition || "";
   $("#editCobaltPicks").value = player.cobaltPicks || "";
+  $("#editPlayableCharacters").value = (player.playableCharacters || []).join(", ");
   $("#editMemo").value = player.memo || "";
   const displayedMost = (player.mostStats || []).length
     ? player.mostStats.map(characterNameForStat)
@@ -1824,6 +1923,7 @@ async function saveApplicantEdit(event) {
     cobaltRating: Math.max(0, Number($("#editCobaltRating").value || 0)),
     cobaltPosition: $("#editCobaltPosition").value,
     cobaltPicks: $("#editCobaltPicks").value.trim(),
+    playableCharacters: normalizeCharacterList($("#editPlayableCharacters").value),
     roles,
     most,
     mostStats: most.join("|") === previousMost.join("|") ? (player.mostStats || []) : [],
@@ -1898,6 +1998,13 @@ function renderHouseRulesSummary() {
         <div>${WEAPON_GROUPS.map((group) => `<p><b>${group.id}</b>${group.weapons.map((weapon) => `<span>${escapeHtml(weapon)}</span>`).join("")}</p>`).join("")}</div>
       </article>`);
   }
+  if (state.settings.peerlessEnabled) {
+    blocks.push(`
+      <article class="house-rule-summary-row">
+        <strong>피어리스</strong>
+        <p>참가자는 플레이 가능한 실험체를 5명 이상 제출하고, 이전 경기에서 사용한 실험체는 다시 사용할 수 없습니다. 최종 결과는 3경기 대회 점수 합산으로 계산합니다.</p>
+      </article>`);
+  }
   section.classList.toggle("empty-house-rules", !blocks.length);
   $("#houseRulesDisplay").innerHTML = blocks.join("");
 }
@@ -1925,17 +2032,21 @@ function exportCsv() {
     ["seasonId", state.settings.seasonId],
     ["tailChaseEnabled", state.settings.tailChaseEnabled ? "yes" : "no"],
     ["weaponGroupEnabled", state.settings.weaponGroupEnabled ? "yes" : "no"],
+    ["peerlessEnabled", state.settings.peerlessEnabled ? "yes" : "no"],
     ["weaponAssignments", Object.entries(state.weaponAssignments).map(([team, group]) => `${team}:${group}`).join(" / ")],
     ["placementPoints", currentScoreRule().placement.join("/")],
     [],
-    ["team", "captain", "members", "total", "match", "roomCode", "replayCode", "gameId", "place", "day1Kills", "lateKills", "penaltyDeaths", "score", "bans"]
+    ["team", "captain", "members", "total", "match", "roomCode", "replayCode", "gameId", "place", "day1Kills", "lateKills", "penaltyDeaths", "score", "bans", "usedCharacters"]
   ];
   state.teams.forEach((team) => {
     const members = team.members.map((id) => getApplicant(id)?.nickname).filter(Boolean).join(" / ");
     const captain = getApplicant(state.captains[team.id])?.nickname || "";
     state.scores.forEach((match, index) => {
       const entry = match[team.id] || {};
-      rows.push([team.name, captain, members, teamTotal(team.id), index + 1, state.roomCodes[index] || "", state.replayCodes[index] || "", state.matchRecords[index]?.gameId || "", entry.place || "", entry.day1Kills || 0, entry.lateKills || 0, entry.penaltyDeaths || 0, scoreFor(entry), entry.bans || ""]);
+      const usedCharacters = Object.entries(entry.usedCharacters || {})
+        .map(([playerId, character]) => `${getApplicant(playerId)?.nickname || playerId}:${character}`)
+        .join(" / ");
+      rows.push([team.name, captain, members, teamTotal(team.id), index + 1, state.roomCodes[index] || "", state.replayCodes[index] || "", state.matchRecords[index]?.gameId || "", entry.place || "", entry.day1Kills || 0, entry.lateKills || 0, entry.penaltyDeaths || 0, scoreFor(entry), entry.bans || "", usedCharacters]);
     });
   });
   const csv = rows.map((row) => row.map((cell) => `"${String(cell ?? "").replaceAll("\"", "\"\"")}"`).join(",")).join("\n");
@@ -2466,6 +2577,7 @@ function bindEvents() {
   $("#cancelApplicantEdit").addEventListener("click", () => $("#applicantEditDialog").close());
   $("#applicantEditForm").addEventListener("submit", saveApplicantEdit);
   $("#scoreBoard").addEventListener("change", updateScore);
+  $("#peerlessBoard").addEventListener("change", updatePeerlessPick);
   $("#banBoard").addEventListener("change", updateBan);
   $("#replayBoard").addEventListener("change", updateReplay);
   $("#replayBoard").addEventListener("change", updateRoom);
@@ -2489,6 +2601,16 @@ function updateScore(event) {
   if (!token) return;
   const [matchIndex, teamId, field] = token.split(":");
   state.scores[Number(matchIndex)][teamId][field] = event.target.value;
+  saveState();
+}
+
+function updatePeerlessPick(event) {
+  const token = event.target.dataset.peerless;
+  if (!token) return;
+  const [matchIndex, teamId, playerId] = token.split(":");
+  const entry = state.scores[Number(matchIndex)]?.[teamId];
+  if (!entry) return;
+  entry.usedCharacters = { ...(entry.usedCharacters || {}), [playerId]: event.target.value.trim() };
   saveState();
 }
 

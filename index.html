@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#fffdf8">
   <title>이터널 리턴 내전 계산기</title>
   <link rel="icon" type="image/svg+xml" href="./favicon.svg">
-  <link rel="stylesheet" href="./style.css?v=20260623-4">
+  <link rel="stylesheet" href="./style.css?v=20260725-2">
 </head>
 <body>
   <header class="topbar">
@@ -281,6 +281,13 @@
             </label>
           </div>
 
+          <div class="peerless-apply-box" id="peerlessApplyBox" hidden>
+            <label>플레이 가능한 실험체 5명 이상
+              <textarea id="playableCharacters" rows="3" placeholder="예: 아야, 헤이즈, 이렘, 키아라, 바냐"></textarea>
+            </label>
+            <p class="field-help">피어리스 내전에서는 신청 시 5명 이상 적어두면 진행 중 픽 확인이 쉬워집니다.</p>
+          </div>
+
           <details class="cobalt-apply-box" id="cobaltApplyBox">
             <summary><i data-lucide="zap"></i> 코발트 내전 양식</summary>
             <div class="form-grid">
@@ -442,6 +449,7 @@
       <div id="replayBoard" class="replay-board"></div>
       <div id="scoreSummary" class="score-summary"></div>
       <div id="scoreBoard" class="score-board"></div>
+      <div id="peerlessBoard" class="peerless-board"></div>
       <details class="ban-details">
         <summary><i data-lucide="shield-ban"></i> 밴 페이즈 기록</summary>
         <div class="score-layout">
@@ -486,6 +494,7 @@
               <th>랭킹</th>
               <th>승률</th>
               <th>모스트</th>
+              <th>플레이 가능</th>
               <th>코발트</th>
               <th>관리</th>
             </tr>
@@ -531,6 +540,9 @@
       </div>
       <label>모스트 실험체 (쉼표로 구분)
         <input id="editMost" placeholder="예: 수아, 레니, 일레븐">
+      </label>
+      <label>플레이 가능한 실험체 (쉼표로 구분)
+        <input id="editPlayableCharacters" placeholder="예: 아야, 헤이즈, 이렘, 키아라, 바냐">
       </label>
       <label>코발트 선호 실험체·무기<input id="editCobaltPicks" placeholder="예: 아야 권총, 헤이즈"></label>
       <label>메모<input id="editMemo"></label>
@@ -625,6 +637,10 @@
             <input id="weaponGroupEnabled" type="checkbox">
             무기군 내전 적용
           </label>
+          <label class="option-check">
+            <input id="peerlessEnabled" type="checkbox">
+            피어리스 내전 적용
+          </label>
         </div>
         <p class="note">필요한 규칙만 선택하면 신청 화면과 관리자 운영 도구에 함께 표시됩니다.</p>
       </fieldset>
@@ -668,8 +684,8 @@
 
   <script src="./config.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="./cloud.js?v=20260623-4"></script>
+  <script src="./cloud.js?v=20260725-2"></script>
   <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
-  <script src="./app.js?v=20260725-1"></script>
+  <script src="./app.js?v=20260725-2"></script>
 </body>
 </html>

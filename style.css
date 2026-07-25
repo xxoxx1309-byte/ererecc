@@ -1091,6 +1091,42 @@ th { color: #46413d; background: var(--surface-2); font-family: var(--heading); 
 .match-grid > b { color: #46413d; background: var(--surface-2); font-family: var(--heading); font-size: 11px; }
 .match-grid input, .match-grid select { min-height: 35px; padding: 5px 7px; }
 
+.peerless-board { margin-top: 14px; }
+.peerless-panel {
+  overflow: hidden;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+}
+.peerless-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 13px 14px;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--line);
+}
+.peerless-head h3 { font-family: var(--heading); font-size: 16px; }
+.peerless-head p { margin-top: 3px; color: var(--subtle); font-size: 12px; }
+.peerless-head span {
+  align-self: start;
+  padding: 4px 8px;
+  color: #a33131;
+  background: var(--rose-soft);
+  border-radius: 5px;
+  font-size: 11px;
+  font-weight: 850;
+  white-space: nowrap;
+}
+.peerless-table { min-width: 860px; border: 0; }
+.peerless-table td small { display: block; margin-top: 3px; color: var(--subtle); font-size: 11px; white-space: normal; }
+.peerless-table input.duplicate {
+  color: #a33131;
+  background: #fff1f1;
+  border-color: #ff6b6b;
+}
+.duplicate-warning { color: #a33131 !important; font-weight: 850; }
+
 .ban-details { margin-top: 16px; border-top: 1px solid var(--line); }
 .ban-details summary { display: flex; align-items: center; gap: 7px; padding: 15px 0 0; color: var(--green); cursor: pointer; font-family: var(--heading); font-weight: 800; }
 .ban-details summary svg { width: 17px; }
