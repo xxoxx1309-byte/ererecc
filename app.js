@@ -1,9 +1,9 @@
 const STORAGE_KEY = "er-custom-match-calculator-v2";
 const LEGACY_STORAGE_KEY = "er-scrim-calculator-v1";
 const API_BASE = "https://open-api.bser.io";
-const DEFAULT_SEASON_ID = 39;
+const DEFAULT_SEASON_ID = 41;
 const RANK_TEAM_MODE = 3;
-const STATE_VERSION = 5;
+const STATE_VERSION = 6;
 const ROLES = ["스증원딜", "평원딜", "공격력브루저", "스증브루저", "암살자", "서포터", "탱커"];
 const KOREAN_CHARACTER_NAMES = {
   1: "재키",
@@ -234,8 +234,9 @@ function loadState() {
 
 function normalizeState(saved, isLegacy = false) {
   const base = defaultState();
+  const savedSeasonId = Number(saved.settings?.seasonId);
   const needsSeasonMigration = Number(saved.version || 0) < STATE_VERSION
-    && Number(saved.settings?.seasonId) === 19;
+    && [19, 39].includes(savedSeasonId);
   const settings = {
     ...base.settings,
     ...(saved.settings || {}),
@@ -925,7 +926,7 @@ function updateSeasonLabel() {
   const season = seasons.find((item) => Number(item.seasonID) === Number(state.settings.seasonId));
   $("#seasonLabel").textContent = season
     ? `${displaySeasonName(season)} · API ID ${season.seasonID}`
-    : `정출 시즌 11 · API ID ${state.settings.seasonId}`;
+    : `정출 시즌 12 · API ID ${state.settings.seasonId}`;
 }
 
 function displaySeasonName(season) {
