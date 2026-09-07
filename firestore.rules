@@ -1,0 +1,51 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function email() {
+      return request.auth.token.email;
+    }
+
+    function isOwner() {
+      return signedIn() && email() == "xxoxx1309@gmail.com";
+    }
+
+    function isOperator() {
+      return signedIn() && (
+        isOwner() ||
+        exists(/databases/$(database)/documents/siteOperators/$(email()))
+      );
+    }
+
+    function eventOpen(eventId) {
+      return get(/databases/$(database)/documents/events/$(eventId)).data.registration_open != false;
+    }
+
+    match /siteOperators/{operatorEmail} {
+      allow read: if isOperator();
+      allow create, update: if isOwner()
+        && request.resource.data.email == operatorEmail
+        && request.resource.data.is_owner == false;
+      allow delete: if isOwner();
+    }
+
+    match /events/{eventId} {
+      allow read, create, update, delete: if isOperator();
+      allow read: if true;
+
+      match /applicants/{applicantId} {
+        allow read, update, delete: if isOperator();
+        allow read: if get(/databases/$(database)/documents/events/$(eventId)).data.published == true;
+        allow create: if eventOpen(eventId);
+      }
+
+      match /backups/{backupId} {
+        allow read, create, update, delete: if isOperator();
+      }
+    }
+  }
+}

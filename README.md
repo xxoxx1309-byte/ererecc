@@ -1,103 +1,65 @@
 # 이터널 리턴 내전 계산기
 
-이터널 리턴 내전 운영을 위한 웹 앱입니다. Supabase를 연결하면 여러 내전을 동시에 보관하고 참가 신청을 실시간으로 받을 수 있습니다. 참가자 랭크와 승률 조회, 역할군 신청, 팀 편성, 팀장 지정, 리플레이 및 밴 기록, 대회 점수 계산, JSON 백업과 CSV 내보내기를 지원합니다.
+이터널 리턴 내전을 운영하기 위한 웹 앱입니다. Firebase Auth와 Firestore를 사용하면 여러 운영자가 내전을 만들고, 참가자는 로그인 없이 내전별 링크에서 신청할 수 있습니다.
 
 ## 주요 기능
 
-- 공식 Open API를 사용한 닉네임, 시즌 랭크, 전체 및 모스트별 승률 조회
-- 참가자는 로그인과 API 키 없이 내전별 링크에서 신청
-- 소유자가 승인한 운영자 이메일 로그인, 복수 내전 생성 및 실시간 신청 명단 동기화
-- 신청 탭과 관리자 탭 분리
-- 팀장 후보를 제외하고 남은 인원을 체크하는 팀원 뽑기 보조
-- 팀장별 픽 현황과 미배정 인원 실시간 공유
-- 게임 결과 CSV의 등수·팀킬·게임 ID 자동 반영
-- 경기별 방 코드·리플레이 코드 기록
-- 내전별 서버 백업·복원과 동시 수정 충돌 감지
-- 고정 금지 대상 방식의 꼬리잡기 룰 표시
-- 꼬리잡기와 무기군 내전 하우스룰 개별 활성화
-- 23개 무기를 선택 폭과 사거리 성향으로 분산한 A~E 무기군 및 팀별 배정
+- Google 로그인 기반 관리자/운영자 관리
+- 내전별 참가 신청 링크 생성
+- 참가자 랭크, 승률, 모스트 실험체 조회
+- 역할군 우선순위, 피어리스 가능 실험체, 코발트 신청 양식
+- 랭크/코발트 기준 팀 편성
+- 24팀, 최대 3조 운영
+- TS/TK 직접 합산 점수 입력
+- 3경기 대회 점수 합산, 피어리스 중복 실험체 경고
+- JSON 백업/복원, 서버 백업, CSV 내보내기
 
-무기군 프리셋은 2026-06-19 공식 Open API의 `WeaponTypeInfo`와 `CharacterMastery`를 기준으로 구성했습니다. 공식 API가 무기별 실시간 승률을 제공하지 않으므로 사용 가능 실험체 수, 기본 사거리, 근접·원거리 및 전투 성향을 기준으로 분산합니다.
-- 공식 시즌 목록 자동 조회 및 정규 시즌 선택
-- 역할군 1·2·3순위 신청
-- MMR 기반 스네이크 팀 편성
-- 가변 경기 수, 팀 수, 팀당 인원
-- 리플레이 코드와 밴 페이즈 기록
-- 편집 가능한 대회 점수룰
-- Supabase 실시간 저장과 브라우저 로컬 비상 저장, JSON 백업/복원, CSV 내보내기
+## Firebase 설정
 
-## API
-
-공식 API 기본 주소는 `https://open-api.bser.io`입니다.
-
-현재 앱은 다음 흐름을 사용합니다.
-
-1. `GET /v1/user/nickname?query={nickname}`
-2. `GET /v1/rank/uid/{userId}/{seasonId}/{matchingTeamMode}`
-3. `GET /v2/user/stats/uid/{userId}/{seasonId}/{matchingMode}`
-4. `GET /v2/data/Season`
-5. `GET /v2/data/Character`
-
-API 키는 공개 저장소에 넣지 않습니다. Supabase 연결 시 키는 Edge Function의 `ER_API_KEY` 비밀값으로만 보관되므로 참가자에게 노출되지 않습니다. 연결하지 않은 로컬 모드에서는 설정 창에 직접 입력한 키가 해당 브라우저의 `localStorage`에만 저장됩니다.
-
-기본 조회 시즌은 현재 게임 표기 `정출 시즌 11`이며, 공식 API 내부 시즌명은 `Season20`, 시즌 ID는 `39`입니다. 화면에서는 정출 시즌 기준으로 변환해 표시합니다.
-
-내전별 일정, 진행자, 시간, 티어 제한, 팀 방식, 인원과 자유 형식 규칙 공지를 설정하고 메인 화면에 표시할 수 있습니다.
-
-로컬 개발 환경에서는 아래 형식의 `config.local.json`을 만들면 자동으로 키를 읽습니다. 이 파일은 `.gitignore`에 포함되어 있습니다.
-
-```json
-{
-  "apiKey": "YOUR_API_KEY"
-}
-```
-
-## 실행
-
-```powershell
-python -m http.server 5173 --bind 127.0.0.1
-```
-
-브라우저에서 `http://127.0.0.1:5173`으로 접속합니다.
-
-## Supabase 연결
-
-1. Supabase 프로젝트를 만들고 프로젝트 설정에서 URL과 Publishable key(또는 기존 anon key)를 확인합니다.
-2. `config.js`에 두 공개 연결값을 입력합니다. 이 키는 RLS가 적용된 공개용 키이며 서버 비밀키가 아닙니다.
+1. Firebase Console에서 프로젝트를 만듭니다.
+2. Authentication에서 Google 로그인을 활성화합니다.
+3. Authentication의 Authorized domains에 `xxoxx1309-byte.github.io`를 추가합니다.
+4. Firestore Database를 생성합니다.
+5. Firebase Web App을 추가하고 SDK 설정값을 복사합니다.
+6. `config.js`의 `firebaseConfig`에 복사한 값을 넣습니다.
 
 ```js
 window.ER_CONFIG = {
-  supabaseUrl: "https://YOUR_PROJECT.supabase.co",
-  supabaseAnonKey: "YOUR_PUBLISHABLE_KEY"
+  firebaseConfig: {
+    apiKey: "YOUR_FIREBASE_API_KEY",
+    authDomain: "YOUR_PROJECT.firebaseapp.com",
+    projectId: "YOUR_PROJECT",
+    storageBucket: "YOUR_PROJECT.appspot.com",
+    messagingSenderId: "YOUR_SENDER_ID",
+    appId: "YOUR_APP_ID"
+  },
+  ownerEmails: ["xxoxx1309@gmail.com"],
+  rankLookupUrl: "https://asia-northeast3-YOUR_PROJECT.cloudfunctions.net/rankLookup"
 };
 ```
 
-3. Supabase CLI로 데이터베이스와 랭크 조회 함수를 배포합니다.
-
-```powershell
-npx supabase login
-npx supabase link --project-ref YOUR_PROJECT_REF
-npx supabase db push
-npx supabase secrets set ER_API_KEY=YOUR_NEW_ER_API_KEY ALLOWED_ORIGIN=https://xxoxx1309-byte.github.io
-npx supabase functions deploy rank-lookup --no-verify-jwt
-```
-
-4. Supabase Authentication의 URL 설정에서 Site URL과 Redirect URL에 실제 GitHub Pages 주소를 등록합니다.
-
-이터널 리턴 API 키는 대화나 공개 파일에 노출된 적이 있다면 새로 발급한 뒤 비밀값에 등록합니다.
-
-## 실시간 운영
-
-1. 사이트 소유자가 관리자 탭에서 운영자 이메일을 등록합니다.
-2. 등록된 운영자는 API 키 없이 이메일로 받은 6자리 인증번호를 입력합니다.
-3. 내전 이름을 입력해 내전을 생성하고 참가 신청 링크를 공유합니다.
-4. 참가자는 링크에서 닉네임과 역할군 우선순위를 제출합니다. 랭크 조회는 선택입니다.
-5. 운영자는 자신이 만든 내전의 명단과 진행 데이터를 관리하며, 사이트 소유자는 모든 내전을 관리합니다.
-
 ## 배포
 
-`index.html`, `style.css`, `app.js`, `config.js`, `cloud.js`를 GitHub Pages에 배포합니다. `supabase` 폴더는 데이터베이스와 Edge Function 배포 소스입니다.
+GitHub Pages만 사용할 경우 `index.html`, `style.css`, `app.js`, `config.js`, `cloud.js`를 배포하면 됩니다. 이 경우 `rankLookupUrl`에는 Firebase Functions의 전체 URL을 넣어야 합니다.
 
-## 디자인
+Firebase Hosting까지 사용할 경우:
 
-본문과 데이터는 Pretendard, 작업 제목과 버튼은 Paperlogy, 메인 내전명은 느림보고딕을 사용합니다. 아이보리, 로즈, 딥그린, 차콜을 중심으로 반복 작업에 적합한 운영 도구 형태로 구성했습니다.
+```powershell
+npm install -g firebase-tools
+firebase login
+firebase init hosting firestore functions
+firebase functions:secrets:set ER_API_KEY
+firebase deploy
+```
+
+랭크 조회 함수는 Blaze 요금제에서 Firebase Functions를 배포한 뒤 `rankLookupUrl`에 함수 URL을 넣어 사용합니다.
+
+## Firestore 규칙
+
+`firestore.rules`를 Firebase에 배포해야 합니다.
+
+- 참가자: 공개된 내전의 신청만 가능
+- 운영자: 내전 생성, 수정, 삭제, 백업 가능
+- 소유자: `xxoxx1309@gmail.com`
+
+운영자를 추가하려면 소유자로 로그인한 뒤 관리자 화면의 운영자 이메일 관리에서 등록합니다.

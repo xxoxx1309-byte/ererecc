@@ -1,8 +1,13 @@
 *.log
 *.tmp
+firebase-debug.log
+firebase-home.png
 .DS_Store
 Thumbs.db
 config.local.json
 .env
 .env.*
-supabase/.temp/
+functions/node_modules/
+functions/.env
+.firebase/
+supabase/

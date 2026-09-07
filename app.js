@@ -140,9 +140,6 @@ const COBALT_POSITIONS = {
   carry: "딜러",
   support: "서포터"
 };
-const OTP_COOLDOWN_MS = 60_000;
-const OTP_EMAIL_KEY = "er-admin-otp-email";
-const OTP_SENT_AT_KEY = "er-admin-otp-sent-at";
 const TAIL_CHASE_EVENT_SLUG = "match-20260620-099ffa";
 const TAIL_CHASE_EDITOR_EMAIL = "enlilblei@gmail.com";
 
@@ -173,9 +170,6 @@ let cloudBackups = [];
 let cloudSaveTimer = null;
 let cloudLoading = false;
 let cloudCreateOpen = false;
-let otpEmail = sessionStorage.getItem(OTP_EMAIL_KEY) || "";
-let otpSentAt = Number(sessionStorage.getItem(OTP_SENT_AT_KEY) || 0);
-let otpCooldownTimer = null;
 let editingApplicantId = null;
 
 const $ = (selector) => document.querySelector(selector);
@@ -381,6 +375,14 @@ function canManageCloudEvent() {
   return String(cloudSession?.user?.email || "").trim().toLowerCase() === TAIL_CHASE_EDITOR_EMAIL;
 }
 
+function sessionUserId(session = cloudSession) {
+  return session?.user?.id || session?.user?.uid || "";
+}
+
+function sessionUserEmail(session = cloudSession) {
+  return session?.user?.email || "";
+}
+
 function cloudApplyUrl(event = cloudEvent) {
   if (!event) return "";
   const url = new URL(location.href);
@@ -426,72 +428,21 @@ function setOperatorError(message = "") {
   error.hidden = !message;
 }
 
-function setOtpError(message = "") {
-  const error = $("#otpError");
-  error.textContent = message;
-  error.hidden = !message;
-}
-
-function otpCooldownSeconds() {
-  return Math.max(0, Math.ceil((OTP_COOLDOWN_MS - (Date.now() - otpSentAt)) / 1000));
-}
-
-function renderOtpCooldown() {
-  const button = $("#resendOtp");
-  const seconds = otpCooldownSeconds();
-  button.disabled = seconds > 0;
-  button.textContent = seconds > 0 ? `재전송 (${seconds}초)` : "재전송";
-  if (!seconds && otpCooldownTimer) {
-    clearInterval(otpCooldownTimer);
-    otpCooldownTimer = null;
-  }
-}
-
-function startOtpCooldown() {
-  clearInterval(otpCooldownTimer);
-  renderOtpCooldown();
-  if (otpCooldownSeconds() > 0) otpCooldownTimer = setInterval(renderOtpCooldown, 1000);
-}
-
-function showOtpStep(email, sentNow = false) {
-  otpEmail = email.trim().toLowerCase();
-  sessionStorage.setItem(OTP_EMAIL_KEY, otpEmail);
-  if (sentNow) {
-    otpSentAt = Date.now();
-    sessionStorage.setItem(OTP_SENT_AT_KEY, String(otpSentAt));
-  }
-  setOtpError();
-  renderCloudControls();
-  startOtpCooldown();
-  $("#adminOtp").focus();
-}
-
-function clearOtpStep(renderAfter = true) {
-  otpEmail = "";
-  otpSentAt = 0;
-  sessionStorage.removeItem(OTP_EMAIL_KEY);
-  sessionStorage.removeItem(OTP_SENT_AT_KEY);
-  clearInterval(otpCooldownTimer);
-  otpCooldownTimer = null;
-  $("#adminOtpForm").reset();
-  setOtpError();
-  if (renderAfter) renderCloudControls();
-}
-
 function friendlyAuthError(error) {
   const message = String(error?.message || "");
-  if (/failed to fetch|network|resolve|dns|load failed/i.test(message)) return "Supabase 서버에 연결할 수 없습니다. 프로젝트가 일시정지되어 있으면 Supabase 대시보드에서 Resume project를 먼저 눌러 주세요.";
-  if (/rate limit|security purposes|after \d+ seconds/i.test(message)) return "인증번호는 60초 후 다시 요청할 수 있습니다.";
-  if (/expired|invalid|token/i.test(message)) return "인증번호가 틀렸거나 만료되었습니다. 새 번호를 요청해 주세요.";
-  return message || "인증 처리에 실패했습니다. 잠시 후 다시 시도해 주세요.";
+  if (/popup-closed|cancelled-popup/i.test(message)) return "로그인 창이 닫혔습니다. 다시 Google 로그인을 눌러 주세요.";
+  if (/popup-blocked/i.test(message)) return "브라우저가 로그인 팝업을 막았습니다. 팝업 허용 후 다시 시도해 주세요.";
+  if (/unauthorized-domain/i.test(message)) return "Firebase Auth 승인 도메인에 현재 사이트 주소를 추가해야 합니다.";
+  if (/failed to fetch|network|resolve|dns|load failed/i.test(message)) return "Firebase 서버에 연결할 수 없습니다. Firebase 설정과 네트워크 상태를 확인해 주세요.";
+  return message || "로그인 처리에 실패했습니다. 잠시 후 다시 시도해 주세요.";
 }
 
 function friendlyCloudError(error) {
   const message = String(error?.message || "");
-  if (/row-level security|permission denied|jwt|session/i.test(message)) return "관리자 로그인이 만료되었습니다. 다시 로그인해 주세요.";
+  if (/permission|denied|jwt|session|missing or insufficient permissions/i.test(message)) return "관리자 권한이 없거나 로그인이 만료되었습니다. 운영자 이메일 등록과 Firebase 규칙을 확인해 주세요.";
   if (/duplicate|unique/i.test(message) || error?.code === "23505") return "신청 주소가 겹쳤습니다. 새 내전을 한 번 더 생성해 주세요.";
-  if (/failed to fetch|network|resolve|dns|load failed/i.test(message)) return "Supabase 서버에 연결할 수 없습니다. 프로젝트가 일시정지되어 있으면 Supabase 대시보드에서 Resume project를 먼저 눌러 주세요.";
-  return message || "내전을 생성하지 못했습니다. 잠시 후 다시 시도해 주세요.";
+  if (/failed to fetch|network|resolve|dns|load failed/i.test(message)) return "Firebase 서버에 연결할 수 없습니다. Firebase 설정과 네트워크 상태를 확인해 주세요.";
+  return message || "내전 데이터를 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.";
 }
 
 function renderOperatorList() {
@@ -518,7 +469,6 @@ function renderBackupControls() {
 
 function renderCloudControls() {
   const configured = Boolean(cloud?.configured);
-  const awaitingOtp = configured && !cloudSession && Boolean(otpEmail);
   const eventReadOnly = Boolean(configured && cloudOperator && cloudEvent && !canManageCloudEvent());
   document.body.classList.toggle("cloud-readonly-admin", configured && !cloudOperator);
   document.body.classList.toggle("cloud-viewonly-admin", eventReadOnly);
@@ -527,13 +477,8 @@ function renderCloudControls() {
   });
   $("#localApiSettings").hidden = configured;
   $("#cloudUnavailable").hidden = configured;
-  $("#adminLoginForm").hidden = !configured || Boolean(cloudSession) || awaitingOtp;
-  $("#adminOtpForm").hidden = !awaitingOtp;
+  $("#adminLoginForm").hidden = !configured || Boolean(cloudSession);
   $("#cloudWorkspace").hidden = !configured || !cloudSession;
-  if (awaitingOtp) {
-    $("#otpSentTo").textContent = `${otpEmail}로 인증번호를 보냈습니다.`;
-    startOtpCooldown();
-  }
   updateViewAvailability();
   if (!configured) {
     setCloudStatus("브라우저 저장 모드", "manual");
@@ -546,7 +491,7 @@ function renderCloudControls() {
     return refreshIcons();
   }
 
-  $("#adminAccount").textContent = cloudSession.user.email || "관리자";
+  $("#adminAccount").textContent = sessionUserEmail() || "관리자";
   const authorized = Boolean(cloudOperator);
   $("#cloudUnauthorized").hidden = authorized;
   $("#eventManagementTools").hidden = !authorized;
@@ -755,8 +700,7 @@ async function handleCloudSession(session, preserveApplyView = false) {
     renderCloudControls();
     return;
   }
-  clearOtpStep(false);
-  cloudOperator = await cloud.operatorProfile(session.user.email || "");
+  cloudOperator = await cloud.operatorProfile(sessionUserEmail(session));
   cloudOperators = isSiteOwner() ? await cloud.listOperators() : [];
   if (cloudOperator) await refreshCloudEvents(cloudEvent?.id || "", !preserveApplyView);
   else cloudEvents = [];
@@ -770,7 +714,7 @@ async function initializeCloud() {
     const url = new URL(location.href);
     url.hash = "admin";
     history.replaceState(null, "", url);
-    toast("이전 이메일 링크는 사용하지 않습니다. 새 인증번호를 요청해 주세요.");
+    toast("이전 로그인 링크는 사용하지 않습니다. Google 로그인을 다시 시도해 주세요.");
   }
   cloud = window.ERCloud?.create(runtimeConfig) || { configured: false };
   renderCloudControls();
@@ -778,7 +722,7 @@ async function initializeCloud() {
   if (!cloudEventSlug()) resetCloudLandingState();
   cloudSession = await cloud.session();
   cloud.onAuthChange((session) => {
-    if ((session?.user?.id || "") === (cloudSession?.user?.id || "")) return;
+    if (sessionUserId(session) === sessionUserId(cloudSession)) return;
     handleCloudSession(session).catch((error) => toast(error.message));
   });
   const slug = cloudEventSlug();
@@ -929,7 +873,7 @@ async function refreshApiMetadata(showMessage = false) {
   setApiStatus("loading", "API 확인 중");
   try {
     if (!state.settings.apiKey) {
-      if (cloud?.configured) {
+      if (cloud?.configured && runtimeConfig.rankLookupUrl) {
         setApiStatus("ok", "온라인 조회 가능");
         if (showMessage) toast("온라인 랭크 조회 기능을 사용합니다.");
         return true;
@@ -1043,7 +987,7 @@ async function lookupRank() {
     toast("닉네임을 입력해 주세요.");
     return null;
   }
-  const useCloudLookup = Boolean(cloud?.configured && cloudEvent);
+  const useCloudLookup = Boolean(cloud?.configured && cloudEvent && runtimeConfig.rankLookupUrl);
   if (!useCloudLookup && !state.settings.apiKey) {
     rankCache = null;
     updateRankPreview({ message: "API 키가 없어 랭크 조회를 건너뜁니다. 닉네임과 역할군만으로 바로 신청할 수 있습니다." }, "manual");
@@ -2303,65 +2247,7 @@ function bindEvents() {
       toast(friendlyAuthError(error));
     }
   });
-  $("#adminLoginForm").addEventListener("submit", async (event) => {
-    event.preventDefault();
-    const email = $("#adminEmail").value.trim().toLowerCase();
-    const button = $("#sendOtpButton");
-    button.disabled = true;
-    try {
-      await cloud.sendOtp(email);
-      showOtpStep(email, true);
-      toast("6자리 인증번호를 보냈습니다.");
-    } catch (error) {
-      toast(friendlyAuthError(error));
-    } finally {
-      button.disabled = false;
-    }
-  });
-  $("#adminOtpForm").addEventListener("submit", async (event) => {
-    event.preventDefault();
-    const token = $("#adminOtp").value.replace(/\D/g, "");
-    if (token.length !== 6) return setOtpError("6자리 인증번호를 입력해 주세요.");
-    const button = $("#verifyOtpButton");
-    button.disabled = true;
-    setOtpError();
-    try {
-      const session = await cloud.verifyOtp(otpEmail, token);
-      clearOtpStep(false);
-      if (session && session.user.id !== cloudSession?.user?.id) await handleCloudSession(session);
-      renderCloudControls();
-      toast("운영자 인증이 완료되었습니다.");
-    } catch (error) {
-      const message = friendlyAuthError(error);
-      setOtpError(message);
-      toast(message);
-    } finally {
-      button.disabled = false;
-    }
-  });
-  $("#resendOtp").addEventListener("click", async () => {
-    if (!otpEmail || otpCooldownSeconds() > 0) return;
-    const button = $("#resendOtp");
-    button.disabled = true;
-    setOtpError();
-    try {
-      await cloud.sendOtp(otpEmail);
-      showOtpStep(otpEmail, true);
-      toast("새 인증번호를 보냈습니다.");
-    } catch (error) {
-      const message = friendlyAuthError(error);
-      setOtpError(message);
-      toast(message);
-    } finally {
-      renderOtpCooldown();
-    }
-  });
-  $("#changeOtpEmail").addEventListener("click", () => {
-    const previousEmail = otpEmail;
-    clearOtpStep();
-    $("#adminEmail").value = previousEmail;
-    $("#adminEmail").focus();
-  });
+  $("#adminLoginForm").addEventListener("submit", (event) => event.preventDefault());
   $("#adminSignOut").addEventListener("click", async () => {
     try {
       await cloud.signOut();
@@ -2446,7 +2332,7 @@ function bindEvents() {
         seed.eventInfo.teamFormat = "코발트 4v4";
         seed.eventInfo.capacity = "8명";
       }
-      const created = await cloud.createEvent({ ownerId: cloudSession.user.id, name, slug, state: seed });
+      const created = await cloud.createEvent({ ownerId: sessionUserId(), name, slug, state: seed });
       $("#createEventForm").reset();
       cloudCreateOpen = false;
       await refreshCloudEvents(created.id);

@@ -1,16 +1,25 @@
 (function () {
-  const EVENT_COLUMNS = "id,owner_id,slug,name,published,registration_open,settings,event_info,teams,captains,draft,weapon_assignments,room_codes,replay_codes,match_records,scores,created_at,updated_at";
-
-  function createClient(config = {}) {
-    const supabaseUrl = String(config.supabaseUrl || "").trim();
-    const supabaseAnonKey = String(config.supabaseAnonKey || "").trim();
-    if (!supabaseUrl || !supabaseAnonKey || !window.supabase?.createClient) return null;
-    return window.supabase.createClient(supabaseUrl, supabaseAnonKey, {
-      auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
-    });
+  function hasFirebaseConfig(config = {}) {
+    const firebaseConfig = config.firebaseConfig || {};
+    return Boolean(firebaseConfig.apiKey && firebaseConfig.projectId && window.firebase?.initializeApp);
   }
 
-  function eventPayload(state) {
+  function toIso(value) {
+    if (!value) return null;
+    if (typeof value.toDate === "function") return value.toDate().toISOString();
+    if (value instanceof Date) return value.toISOString();
+    return String(value);
+  }
+
+  function nowField(firebase) {
+    return firebase.firestore.FieldValue.serverTimestamp();
+  }
+
+  function normalizeEmail(email) {
+    return String(email || "").trim().toLowerCase();
+  }
+
+  function eventPayload(state, firebase) {
     const settings = { ...(state.settings || {}) };
     delete settings.apiKey;
     delete settings.apiBase;
@@ -25,7 +34,32 @@
       room_codes: state.roomCodes || [],
       replay_codes: state.replayCodes || [],
       match_records: state.matchRecords || [],
-      scores: state.scores || []
+      scores: state.scores || [],
+      updated_at: nowField(firebase)
+    };
+  }
+
+  function eventFromDoc(doc) {
+    const data = doc.data() || {};
+    return {
+      id: doc.id,
+      owner_id: data.owner_id || "",
+      slug: data.slug || "",
+      name: data.name || data.settings?.eventName || "이터널 리턴 내전",
+      published: data.published !== false,
+      registration_open: data.registration_open !== false,
+      settings: data.settings || {},
+      event_info: data.event_info || {},
+      teams: data.teams || [],
+      captains: data.captains || {},
+      draft: data.draft || {},
+      weapon_assignments: data.weapon_assignments || {},
+      room_codes: data.room_codes || [],
+      replay_codes: data.replay_codes || [],
+      match_records: data.match_records || [],
+      scores: data.scores || [],
+      created_at: toIso(data.created_at),
+      updated_at: toIso(data.updated_at)
     };
   }
 
@@ -47,10 +81,8 @@
     };
   }
 
-  function applicantToRow(eventId, applicant) {
+  function applicantToDoc(applicant) {
     return {
-      id: applicant.id,
-      event_id: eventId,
       nickname: applicant.nickname,
       discord_name: applicant.discordName || "",
       roles: applicant.roles || [],
@@ -72,9 +104,10 @@
     };
   }
 
-  function applicantFromRow(row) {
+  function applicantFromDoc(doc) {
+    const row = doc.data ? doc.data() : doc;
     return {
-      id: row.id,
+      id: row.id || doc.id,
       nickname: row.nickname,
       discordName: row.discord_name || "",
       roles: row.roles || [],
@@ -93,223 +126,268 @@
       cobaltPosition: row.cobalt_position || "",
       cobaltPicks: row.cobalt_picks || "",
       memo: row.memo || "",
-      createdAt: row.created_at
+      createdAt: toIso(row.created_at)
     };
   }
 
-  function create(config) {
-    const client = createClient(config);
-    let applicantChannel = null;
-    let eventChannel = null;
+  function applicantId(applicant) {
+    return String(applicant.nickname || applicant.id || crypto.randomUUID())
+      .trim()
+      .toLowerCase()
+      .replace(/[^\p{L}\p{N}_-]+/gu, "-")
+      .replace(/^-+|-+$/g, "")
+      || crypto.randomUUID();
+  }
+
+  function operatorFromDoc(doc, fallbackEmail = "") {
+    if (!doc?.exists) return null;
+    const data = doc.data() || {};
     return {
-      configured: Boolean(client),
-      client,
+      id: doc.id,
+      email: data.email || fallbackEmail || doc.id,
+      is_owner: data.is_owner === true,
+      created_at: toIso(data.created_at)
+    };
+  }
+
+  function create(config = {}) {
+    if (!hasFirebaseConfig(config)) return { configured: false };
+    const firebase = window.firebase;
+    if (!firebase.apps?.length) firebase.initializeApp(config.firebaseConfig);
+    const auth = firebase.auth();
+    const db = firebase.firestore();
+    let applicantUnsubscribe = null;
+    let eventUnsubscribe = null;
+    let activeEventId = "";
+
+    const events = () => db.collection("events");
+    const operators = () => db.collection("siteOperators");
+    const applicants = (eventId) => events().doc(eventId).collection("applicants");
+    const backups = (eventId) => events().doc(eventId).collection("backups");
+
+    return {
+      configured: true,
+      client: { auth, db },
       eventPayload,
       stateFromEvent,
-      applicantFromRow,
+      applicantFromRow: applicantFromDoc,
 
       async session() {
-        if (!client) return null;
-        const { data, error } = await client.auth.getSession();
-        if (error) throw error;
-        return data.session;
+        await auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
+        return auth.currentUser ? { user: auth.currentUser } : null;
       },
 
       onAuthChange(callback) {
-        if (!client) return () => {};
-        const { data } = client.auth.onAuthStateChange((_event, session) => callback(session));
-        return () => data.subscription.unsubscribe();
-      },
-
-      async sendOtp(email) {
-        const { error } = await client.auth.signInWithOtp({
-          email,
-          options: { shouldCreateUser: true }
-        });
-        if (error) throw error;
-      },
-
-      async verifyOtp(email, token) {
-        const { data, error } = await client.auth.verifyOtp({ email, token, type: "email" });
-        if (error) throw error;
-        return data.session;
+        return auth.onAuthStateChanged((user) => callback(user ? { user } : null));
       },
 
       async signInWithGoogle() {
-        const redirectUrl = new URL(window.location.href);
-        redirectUrl.hash = "";
-        const { data, error } = await client.auth.signInWithOAuth({
-          provider: "google",
-          options: { redirectTo: redirectUrl.toString() }
-        });
-        if (error) throw error;
-        return data;
+        const provider = new firebase.auth.GoogleAuthProvider();
+        provider.setCustomParameters({ prompt: "select_account" });
+        const result = await auth.signInWithPopup(provider);
+        return { session: { user: result.user } };
       },
 
       async signOut() {
-        const { error } = await client.auth.signOut();
-        if (error) throw error;
-      },
-
-      async listEvents() {
-        const { data, error } = await client.from("events").select(EVENT_COLUMNS).order("updated_at", { ascending: false });
-        if (error) throw error;
-        return data || [];
+        await auth.signOut();
       },
 
       async operatorProfile(email) {
-        const { data, error } = await client.from("site_operators").select("id,email,is_owner,created_at").eq("email", email.trim().toLowerCase()).maybeSingle();
-        if (error) throw error;
-        return data || null;
+        const normalized = normalizeEmail(email);
+        if (!normalized) return null;
+        const doc = await operators().doc(normalized).get();
+        const saved = operatorFromDoc(doc, normalized);
+        if (saved) return saved;
+        if ((config.ownerEmails || []).map(normalizeEmail).includes(normalized)) {
+          return { id: normalized, email: normalized, is_owner: true, created_at: null };
+        }
+        return null;
       },
 
       async listOperators() {
-        const { data, error } = await client.from("site_operators").select("id,email,is_owner,created_at").order("is_owner", { ascending: false }).order("created_at", { ascending: true });
-        if (error) throw error;
-        return data || [];
+        const snapshot = await operators().get();
+        const rows = snapshot.docs
+          .map((doc) => operatorFromDoc(doc))
+          .filter(Boolean)
+          .sort((a, b) => {
+            if (a.is_owner !== b.is_owner) return a.is_owner ? -1 : 1;
+            return String(a.created_at || "").localeCompare(String(b.created_at || ""));
+          });
+        (config.ownerEmails || []).map(normalizeEmail).forEach((email) => {
+          if (email && !rows.some((row) => normalizeEmail(row.email) === email)) {
+            rows.unshift({ id: email, email, is_owner: true, created_at: null });
+          }
+        });
+        return rows;
       },
 
       async addOperator(email) {
-        const { data, error } = await client.from("site_operators").insert({ email: email.trim().toLowerCase(), is_owner: false }).select("id,email,is_owner,created_at").single();
-        if (error) throw error;
-        return data;
+        const normalized = normalizeEmail(email);
+        if (!normalized) throw new Error("운영자 이메일을 입력해 주세요.");
+        const ref = operators().doc(normalized);
+        if ((await ref.get()).exists) {
+          const duplicate = new Error("이미 등록된 운영자 이메일입니다.");
+          duplicate.code = "23505";
+          throw duplicate;
+        }
+        await ref.set({
+          email: normalized,
+          is_owner: false,
+          created_at: nowField(firebase)
+        }, { merge: false });
+        const doc = await ref.get();
+        return operatorFromDoc(doc, normalized);
       },
 
       async removeOperator(operatorId) {
-        const { error } = await client.from("site_operators").delete().eq("id", operatorId);
-        if (error) throw error;
+        await operators().doc(normalizeEmail(operatorId)).delete();
+      },
+
+      async listEvents() {
+        const snapshot = await events().orderBy("updated_at", "desc").get();
+        return snapshot.docs.map(eventFromDoc);
       },
 
       async createEvent({ ownerId, name, slug, state }) {
-        const payload = { ...eventPayload(state), owner_id: ownerId, name, slug, published: true, registration_open: true };
-        const { data, error } = await client.from("events").insert(payload).select(EVENT_COLUMNS).single();
-        if (error) throw error;
-        return data;
+        const ref = events().doc();
+        await ref.set({
+          ...eventPayload(state, firebase),
+          owner_id: ownerId,
+          slug,
+          name,
+          published: true,
+          registration_open: true,
+          created_at: nowField(firebase)
+        });
+        activeEventId = ref.id;
+        return eventFromDoc(await ref.get());
       },
 
-      async updateEvent(eventId, state, extras = {}, expectedUpdatedAt = "") {
-        let query = client.from("events").update({ ...eventPayload(state), ...extras }).eq("id", eventId);
-        if (expectedUpdatedAt) query = query.eq("updated_at", expectedUpdatedAt);
-        const { data, error } = await query.select(EVENT_COLUMNS).maybeSingle();
-        if (error) throw error;
-        if (!data) {
-          const conflict = new Error("다른 운영자가 먼저 수정했습니다. 최신 상태를 다시 불러왔습니다.");
-          conflict.code = "EVENT_CONFLICT";
-          throw conflict;
-        }
-        return data;
+      async updateEvent(eventId, state, extras = {}) {
+        const ref = events().doc(eventId);
+        await ref.update({ ...eventPayload(state, firebase), ...extras, updated_at: nowField(firebase) });
+        activeEventId = eventId;
+        return eventFromDoc(await ref.get());
       },
 
       async deleteEvent(eventId) {
-        const { error } = await client.from("events").delete().eq("id", eventId);
-        if (error) throw error;
+        await this.clearApplicants(eventId);
+        const backupSnapshot = await backups(eventId).get();
+        const batch = db.batch();
+        backupSnapshot.docs.forEach((doc) => batch.delete(doc.ref));
+        await batch.commit();
+        await events().doc(eventId).delete();
       },
 
       async eventBySlug(slug) {
-        const { data, error } = await client.rpc("get_public_event", { event_slug: slug });
-        if (error) throw error;
-        const event = data?.[0] || null;
-        if (event) event.public_applicants = (event.public_applicants || []).map(applicantFromRow);
+        const snapshot = await events().where("slug", "==", slug).limit(1).get();
+        if (snapshot.empty) return null;
+        const event = eventFromDoc(snapshot.docs[0]);
+        if (event.published === false) return null;
+        activeEventId = event.id;
+        event.public_applicants = await this.applicants(event.id);
         return event;
       },
 
       async eventById(eventId) {
-        const { data, error } = await client.from("events").select(EVENT_COLUMNS).eq("id", eventId).single();
-        if (error) throw error;
-        return data;
+        activeEventId = eventId;
+        return eventFromDoc(await events().doc(eventId).get());
       },
 
       async applicants(eventId) {
-        const { data, error } = await client.from("applicants").select("*").eq("event_id", eventId).order("created_at", { ascending: true });
-        if (error) throw error;
-        return (data || []).map(applicantFromRow);
+        activeEventId = eventId;
+        const snapshot = await applicants(eventId).orderBy("created_at", "asc").get();
+        return snapshot.docs.map(applicantFromDoc);
       },
 
       async submitApplicant(eventId, applicant) {
-        const { error } = await client.from("applicants").insert(applicantToRow(eventId, applicant));
-        if (error) throw error;
+        const ref = applicants(eventId).doc(applicantId(applicant));
+        const saved = await ref.get();
+        if (saved.exists) {
+          const duplicate = new Error("이미 신청된 인게임 닉네임입니다.");
+          duplicate.code = "23505";
+          throw duplicate;
+        }
+        await ref.set({ ...applicantToDoc(applicant), created_at: nowField(firebase), updated_at: nowField(firebase) });
       },
 
       async updateApplicant(eventId, applicant) {
-        const row = applicantToRow(eventId, applicant);
-        delete row.id;
-        delete row.event_id;
-        const { error } = await client.from("applicants").update(row).eq("id", applicant.id).eq("event_id", eventId);
-        if (error) throw error;
+        await applicants(eventId).doc(applicant.id).set({ ...applicantToDoc(applicant), updated_at: nowField(firebase) }, { merge: true });
       },
 
-      async deleteApplicant(applicantId) {
-        const { error } = await client.from("applicants").delete().eq("id", applicantId);
-        if (error) throw error;
+      async deleteApplicant(applicantIdValue) {
+        if (!activeEventId) throw new Error("삭제할 내전이 선택되지 않았습니다.");
+        await applicants(activeEventId).doc(applicantIdValue).delete();
       },
 
       async clearApplicants(eventId) {
-        const { error } = await client.from("applicants").delete().eq("event_id", eventId);
-        if (error) throw error;
+        const snapshot = await applicants(eventId).get();
+        const batch = db.batch();
+        snapshot.docs.forEach((doc) => batch.delete(doc.ref));
+        await batch.commit();
       },
 
-      async replaceApplicants(eventId, applicants) {
-        const { error: deleteError } = await client.from("applicants").delete().eq("event_id", eventId);
-        if (deleteError) throw deleteError;
-        if (!applicants.length) return;
-        const { error: insertError } = await client.from("applicants").insert(applicants.map((applicant) => applicantToRow(eventId, applicant)));
-        if (insertError) throw insertError;
+      async replaceApplicants(eventId, rows) {
+        await this.clearApplicants(eventId);
+        const batch = db.batch();
+        rows.forEach((applicant) => {
+          batch.set(applicants(eventId).doc(applicantId(applicant)), {
+            ...applicantToDoc(applicant),
+            created_at: nowField(firebase),
+            updated_at: nowField(firebase)
+          });
+        });
+        await batch.commit();
       },
 
       async listBackups(eventId) {
-        const { data, error } = await client.from("event_backups").select("id,event_id,label,snapshot,created_at").eq("event_id", eventId).order("created_at", { ascending: false });
-        if (error) throw error;
-        return data || [];
+        const snapshot = await backups(eventId).orderBy("created_at", "desc").get();
+        return snapshot.docs.map((doc) => ({ id: doc.id, event_id: eventId, ...(doc.data() || {}), created_at: toIso(doc.data()?.created_at) }));
       },
 
       async createBackup(eventId, label, snapshot) {
-        const { data, error } = await client.from("event_backups").insert({ event_id: eventId, label, snapshot }).select("id,event_id,label,snapshot,created_at").single();
-        if (error) throw error;
-        return data;
+        const ref = backups(eventId).doc();
+        await ref.set({ event_id: eventId, label, snapshot, created_at: nowField(firebase) });
+        const doc = await ref.get();
+        return { id: doc.id, event_id: eventId, ...(doc.data() || {}), created_at: toIso(doc.data()?.created_at) };
       },
 
       async deleteBackup(backupId) {
-        const { error } = await client.from("event_backups").delete().eq("id", backupId);
-        if (error) throw error;
+        if (!activeEventId) throw new Error("삭제할 내전이 선택되지 않았습니다.");
+        await backups(activeEventId).doc(backupId).delete();
       },
 
       subscribeEvent(eventId, callback) {
-        if (eventChannel) client.removeChannel(eventChannel);
-        eventChannel = client.channel(`event:${eventId}`)
-          .on("postgres_changes", { event: "UPDATE", schema: "public", table: "events", filter: `id=eq.${eventId}` }, callback)
-          .subscribe();
+        if (eventUnsubscribe) eventUnsubscribe();
+        eventUnsubscribe = events().doc(eventId).onSnapshot(() => callback());
         return () => {
-          if (eventChannel) client.removeChannel(eventChannel);
-          eventChannel = null;
+          if (eventUnsubscribe) eventUnsubscribe();
+          eventUnsubscribe = null;
         };
       },
 
       subscribePublicEvent(eventId, callback) {
-        if (eventChannel) client.removeChannel(eventChannel);
-        eventChannel = client.channel(`public-event:${eventId}`)
-          .on("postgres_changes", { event: "UPDATE", schema: "public", table: "public_event_updates", filter: `event_id=eq.${eventId}` }, callback)
-          .subscribe();
-        return () => {
-          if (eventChannel) client.removeChannel(eventChannel);
-          eventChannel = null;
-        };
+        return this.subscribeEvent(eventId, callback);
       },
 
       subscribeApplicants(eventId, callback) {
-        if (applicantChannel) client.removeChannel(applicantChannel);
-        applicantChannel = client.channel(`applicants:${eventId}`)
-          .on("postgres_changes", { event: "*", schema: "public", table: "applicants", filter: `event_id=eq.${eventId}` }, callback)
-          .subscribe();
+        if (applicantUnsubscribe) applicantUnsubscribe();
+        applicantUnsubscribe = applicants(eventId).onSnapshot(() => callback());
         return () => {
-          if (applicantChannel) client.removeChannel(applicantChannel);
-          applicantChannel = null;
+          if (applicantUnsubscribe) applicantUnsubscribe();
+          applicantUnsubscribe = null;
         };
       },
 
       async rankLookup(payload) {
-        const { data, error } = await client.functions.invoke("rank-lookup", { body: payload });
-        if (error) throw new Error(error.context?.body?.error || error.message);
-        if (data?.error) throw new Error(data.error);
+        if (!config.rankLookupUrl) throw new Error("Firebase Functions rankLookup URL을 config.js에 설정해 주세요.");
+        const response = await fetch(config.rankLookupUrl, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || data.error) throw new Error(data.error || "랭크 조회에 실패했습니다.");
         return data;
       }
     };

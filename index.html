@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#fffdf8">
   <title>이터널 리턴 내전 계산기</title>
   <link rel="icon" type="image/svg+xml" href="./favicon.svg">
-  <link rel="stylesheet" href="./style.css?v=20260907-1">
+  <link rel="stylesheet" href="./style.css?v=20260907-firebase-1">
 </head>
 <body>
   <header class="topbar">
@@ -66,7 +66,7 @@
         <i data-lucide="database-zap"></i>
         <div>
           <strong>데이터베이스 연결이 필요합니다</strong>
-          <p>Supabase 연결 전에는 기존 브라우저 저장 모드로 동작합니다.</p>
+          <p>Firebase 연결 전에는 기존 브라우저 저장 모드로 동작합니다.</p>
         </div>
       </div>
 
@@ -74,29 +74,7 @@
         <button class="google-login-button" id="googleLoginButton" type="button">
           <span aria-hidden="true">G</span> Google로 로그인
         </button>
-        <div class="login-divider"><span>또는 이메일 인증</span></div>
-        <label>운영자 이메일
-          <input id="adminEmail" type="email" autocomplete="email" required placeholder="인증번호를 받을 이메일">
-        </label>
-        <button class="primary" id="sendOtpButton" type="submit">
-          <i data-lucide="mail"></i> 인증번호 받기
-        </button>
-        <p>Google 계정 또는 이메일 인증번호로 로그인할 수 있습니다.</p>
-      </form>
-
-      <form id="adminOtpForm" class="cloud-login otp-login" hidden>
-        <label>6자리 인증번호
-          <input id="adminOtp" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" required placeholder="000000">
-        </label>
-        <button class="primary" id="verifyOtpButton" type="submit">
-          <i data-lucide="shield-check"></i> 확인
-        </button>
-        <div class="otp-actions">
-          <span id="otpSentTo"></span>
-          <button class="text-button" id="resendOtp" type="button">재전송</button>
-          <button class="text-button" id="changeOtpEmail" type="button">이메일 변경</button>
-        </div>
-        <p id="otpError" class="form-error" role="alert" hidden></p>
+        <p>운영자로 등록된 Google 계정으로 로그인하세요. 참가자는 로그인 없이 신청할 수 있습니다.</p>
       </form>
 
       <div id="cloudWorkspace" class="cloud-workspace" hidden>
@@ -691,9 +669,11 @@
   <div id="toast" role="status" aria-live="polite"></div>
 
   <script src="./config.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="./cloud.js?v=20260907-1"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+  <script src="./cloud.js?v=20260907-firebase-1"></script>
   <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
-  <script src="./app.js?v=20260907-1"></script>
+  <script src="./app.js?v=20260907-firebase-1"></script>
 </body>
 </html>
