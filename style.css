@@ -1068,7 +1068,7 @@ button:disabled { cursor: not-allowed; opacity: .55; transform: none; }
 .captain-grid, .replay-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
 .captain-item { padding: 9px; background: var(--surface-2); border-radius: 7px; }
 
-.score-summary, .ban-board { overflow-x: auto; margin-bottom: 14px; }
+.score-summary, .group-score-summary, .ban-board { overflow-x: auto; margin-bottom: 14px; }
 .score-board { display: grid; gap: 10px; }
 
 .sheet-table, .roster-table {
@@ -1087,9 +1087,34 @@ th { color: #46413d; background: var(--surface-2); font-family: var(--heading); 
 .match-card { overflow: hidden; border: 1px solid var(--line); border-radius: 7px; background: #fff; }
 .match-card h3 { padding: 10px 13px; color: #fff; background: var(--green); font-size: 15px; }
 .match-grid { display: grid; grid-template-columns: 1.1fr repeat(4, .7fr); gap: 1px; background: var(--line); }
+.match-grid.simple-score-grid { grid-template-columns: 1.1fr repeat(3, .7fr); }
 .match-grid > * { padding: 8px; background: #fff; }
 .match-grid > b { color: #46413d; background: var(--surface-2); font-family: var(--heading); font-size: 11px; }
 .match-grid input, .match-grid select { min-height: 35px; padding: 5px 7px; }
+.match-grid > strong { color: #a33131; font-family: var(--heading); text-align: center; }
+
+.group-score-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(240px, 1fr));
+  gap: 10px;
+  min-width: 760px;
+}
+.group-score-card {
+  overflow: hidden;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+}
+.group-score-card h3 {
+  padding: 10px 12px;
+  color: #fff;
+  background: linear-gradient(135deg, var(--rose), var(--gold));
+  font-family: var(--heading);
+  font-size: 15px;
+}
+.group-score-card table { width: 100%; border-collapse: collapse; }
+.group-score-card th, .group-score-card td { padding: 8px 9px; font-size: 12px; }
+.group-score-card td:first-child { width: 46px; color: var(--rose); font-weight: 850; text-align: center; }
 
 .peerless-board { margin-top: 14px; }
 .peerless-panel {

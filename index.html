@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#fffdf8">
   <title>이터널 리턴 내전 계산기</title>
   <link rel="icon" type="image/svg+xml" href="./favicon.svg">
-  <link rel="stylesheet" href="./style.css?v=20260725-2">
+  <link rel="stylesheet" href="./style.css?v=20260907-1">
 </head>
 <body>
   <header class="topbar">
@@ -349,7 +349,7 @@
       </div>
       <div class="team-controls">
         <label>팀 수
-          <input id="desiredTeams" type="number" min="2" max="12" value="8">
+          <input id="desiredTeams" type="number" min="2" max="24" value="8">
         </label>
         <label>팀당 인원
           <input id="teamSize" type="number" min="1" max="4" value="3">
@@ -359,6 +359,9 @@
             <option value="current">현재 시즌</option>
             <option value="peak">최근 3시즌 최고</option>
           </select>
+        </label>
+        <label>조 수
+          <input id="groupCount" type="number" min="1" max="3" value="1">
         </label>
         <p>선택한 MMR 기준으로 정렬한 뒤 스네이크 방식으로 균형을 맞춥니다.</p>
       </div>
@@ -448,6 +451,7 @@
       <div id="gameResultImportStatus" class="import-status" hidden></div>
       <div id="replayBoard" class="replay-board"></div>
       <div id="scoreSummary" class="score-summary"></div>
+      <div id="groupScoreSummary" class="group-score-summary"></div>
       <div id="scoreBoard" class="score-board"></div>
       <div id="peerlessBoard" class="peerless-board"></div>
       <details class="ban-details">
@@ -651,6 +655,10 @@
           <input id="tournamentScoring" type="checkbox" checked>
           대회 점수 산정 적용
         </label>
+        <label class="option-check">
+          <input id="tsTkScoring" type="checkbox">
+          TS/TK 직접 합산
+        </label>
         <div class="rule-grid">
           <label>등수 점수 (1~8등)
             <input id="placementPoints" placeholder="10,7,5,4,3,2,1,0">
@@ -684,8 +692,8 @@
 
   <script src="./config.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="./cloud.js?v=20260725-2"></script>
+  <script src="./cloud.js?v=20260907-1"></script>
   <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
-  <script src="./app.js?v=20260725-2"></script>
+  <script src="./app.js?v=20260907-1"></script>
 </body>
 </html>

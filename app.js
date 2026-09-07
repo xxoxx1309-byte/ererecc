@@ -193,10 +193,12 @@ function defaultState() {
       matchCount: 4,
       desiredTeams: 8,
       teamSize: 3,
+      groupCount: 1,
       mmrBasis: "current",
       tailChaseEnabled: false,
       weaponGroupEnabled: false,
       peerlessEnabled: false,
+      tsTkScoring: false,
       tournamentScoring: true,
       scoreRule: structuredClone(DEFAULT_SCORE_RULE)
     },
@@ -248,6 +250,8 @@ function normalizeState(saved, isLegacy = false) {
       ? DEFAULT_SEASON_ID
       : Number(saved.settings?.seasonId || DEFAULT_SEASON_ID),
     matchCount: Number(saved.settings?.matchCount || saved.scores?.length || base.settings.matchCount),
+    desiredTeams: Math.min(24, Math.max(2, Number(saved.settings?.desiredTeams || base.settings.desiredTeams))),
+    groupCount: Math.min(3, Math.max(1, Number(saved.settings?.groupCount || base.settings.groupCount))),
     scoreRule: {
       ...DEFAULT_SCORE_RULE,
       ...(saved.settings?.scoreRule || {})
@@ -811,11 +815,13 @@ function bindSettings() {
   $("#matchCount").value = state.settings.matchCount;
   $("#desiredTeams").value = state.settings.desiredTeams || 8;
   $("#teamSize").value = state.settings.teamSize || 3;
+  $("#groupCount").value = state.settings.groupCount || 1;
   $("#mmrBasis").value = state.settings.mmrBasis || "current";
   $("#draftCaptainMode").value = state.draft?.captainMode || "high";
   $("#tailChaseEnabled").checked = state.settings.tailChaseEnabled === true;
   $("#weaponGroupEnabled").checked = state.settings.weaponGroupEnabled === true;
   $("#peerlessEnabled").checked = state.settings.peerlessEnabled === true;
+  $("#tsTkScoring").checked = state.settings.tsTkScoring === true;
   $("#tournamentScoring").checked = state.settings.tournamentScoring !== false;
   $("#placementPoints").value = currentScoreRule().placement.join(",");
   $("#day1KillPoint").value = currentScoreRule().day1Kill;
@@ -850,12 +856,14 @@ function readSettings() {
     eventType: cobaltMode ? "cobalt" : "normal",
     teamMode: selectedTeamMode,
     matchCount: Math.min(12, Math.max(1, Number($("#matchCount").value || 4))),
-    desiredTeams: cobaltMode ? 2 : Math.min(12, Math.max(2, Number($("#desiredTeams").value || 8))),
+    desiredTeams: cobaltMode ? 2 : Math.min(24, Math.max(2, Number($("#desiredTeams").value || 8))),
     teamSize: cobaltMode ? 4 : Math.min(4, Math.max(1, Number($("#teamSize").value || 3))),
+    groupCount: cobaltMode ? 1 : Math.min(3, Math.max(1, Number($("#groupCount").value || 1))),
     mmrBasis: $("#mmrBasis").value === "peak" ? "peak" : "current",
     tailChaseEnabled: $("#tailChaseEnabled").checked,
     weaponGroupEnabled: $("#weaponGroupEnabled").checked,
     peerlessEnabled: $("#peerlessEnabled").checked,
+    tsTkScoring: $("#tsTkScoring").checked,
     tournamentScoring: $("#tournamentScoring").checked,
     scoreRule: {
       placement: placement.length === 8 ? placement : [...DEFAULT_SCORE_RULE.placement],
@@ -1380,8 +1388,9 @@ function makeCobaltTeams() {
 }
 
 function readTeamControls() {
-  state.settings.desiredTeams = Math.min(12, Math.max(2, Number($("#desiredTeams").value || 8)));
+  state.settings.desiredTeams = Math.min(24, Math.max(2, Number($("#desiredTeams").value || 8)));
   state.settings.teamSize = Math.min(4, Math.max(1, Number($("#teamSize").value || 3)));
+  state.settings.groupCount = Math.min(3, Math.max(1, Number($("#groupCount").value || 1)));
   state.settings.mmrBasis = $("#mmrBasis").value === "peak" ? "peak" : "current";
 }
 
@@ -1408,6 +1417,9 @@ function applicantMmr(player) {
 }
 
 function scoreFor(entry = {}) {
+  if (state.settings.tsTkScoring === true) {
+    return Number(entry.tsScore || 0) + Number(entry.tkScore || 0);
+  }
   const rule = currentScoreRule();
   const placeScore = placementPoints()[Number(entry.place || 0)] ?? 0;
   return placeScore
@@ -1480,7 +1492,7 @@ function renderTeamMakerGuide() {
 
 function tailRuleTeams() {
   if (state.teams.length) return state.teams.map((team) => team.name);
-  const count = Math.min(12, Math.max(2, Number(state.settings.desiredTeams || 8)));
+  const count = Math.min(24, Math.max(2, Number(state.settings.desiredTeams || 8)));
   return Array.from({ length: count }, (_, index) => `${index + 1}팀`);
 }
 
@@ -1656,6 +1668,7 @@ function renderScores() {
   normalizeScores();
   renderReplayCodes();
   renderScoreSummary();
+  renderGroupScoreSummary();
   renderMatchCards();
   renderPeerlessBoard();
   renderBanBoard();
@@ -1688,25 +1701,70 @@ function renderScoreSummary() {
   $("#scoreSummary").innerHTML = `<table class="sheet-table"><thead><tr><th></th>${headers}</tr></thead><tbody>${rows}${total}</tbody></table>`;
 }
 
+function groupNameForIndex(index) {
+  return `${String.fromCharCode(65 + index)}조`;
+}
+
+function teamsByGroup() {
+  const count = Math.min(3, Math.max(1, Number(state.settings.groupCount || 1)));
+  const size = Math.ceil(Math.max(1, state.teams.length) / count);
+  return Array.from({ length: count }, (_, index) => ({
+    name: groupNameForIndex(index),
+    teams: state.teams.slice(index * size, (index + 1) * size)
+  })).filter((group) => group.teams.length);
+}
+
+function renderGroupScoreSummary() {
+  const board = $("#groupScoreSummary");
+  if (!board) return;
+  if (!state.teams.length || Number(state.settings.groupCount || 1) <= 1) {
+    board.innerHTML = "";
+    return;
+  }
+  board.innerHTML = `<div class="group-score-grid">${teamsByGroup().map((group) => {
+    const rows = group.teams
+      .slice()
+      .sort((a, b) => teamTotal(b.id) - teamTotal(a.id))
+      .map((team, index) => `<tr><td>${index + 1}</td><th>${escapeHtml(team.name)}</th><td><strong>${teamTotal(team.id)}</strong></td></tr>`)
+      .join("");
+    return `<article class="group-score-card">
+      <h3>${group.name}</h3>
+      <table><thead><tr><th>순위</th><th>팀</th><th>합계</th></tr></thead><tbody>${rows}</tbody></table>
+    </article>`;
+  }).join("")}</div>`;
+}
+
 function renderMatchCards() {
   const board = $("#scoreBoard");
   board.innerHTML = "";
+  const simple = state.settings.tsTkScoring === true;
   state.scores.forEach((match, matchIndex) => {
     const template = $("#matchTemplate").content.cloneNode(true);
     template.querySelector("h3").textContent = `${matchIndex + 1}경기`;
     const grid = template.querySelector(".match-grid");
-    grid.innerHTML = "<b>팀 / 점수</b><b>등수</b><b>1일차 킬</b><b>이후 킬</b><b>금구사</b>";
+    grid.classList.toggle("simple-score-grid", simple);
+    grid.innerHTML = simple
+      ? "<b>팀 / 결과</b><b>TS</b><b>TK</b><b>합계</b>"
+      : "<b>팀 / 점수</b><b>등수</b><b>1일차 킬</b><b>이후 킬</b><b>금구사</b>";
     state.teams.forEach((team) => {
       const entry = match[team.id] || {};
-      grid.insertAdjacentHTML("beforeend", `
-        <span>${team.name} · <strong>${scoreFor(entry)}점</strong></span>
-        <select data-score="${matchIndex}:${team.id}:place">
-          <option value="">-</option>
-          ${Object.keys(placementPoints()).map((place) => `<option value="${place}" ${String(entry.place) === place ? "selected" : ""}>${place}등</option>`).join("")}
-        </select>
-        <input data-score="${matchIndex}:${team.id}:day1Kills" type="number" min="0" value="${entry.day1Kills || 0}">
-        <input data-score="${matchIndex}:${team.id}:lateKills" type="number" min="0" value="${entry.lateKills || 0}">
-        <input data-score="${matchIndex}:${team.id}:penaltyDeaths" type="number" min="0" value="${entry.penaltyDeaths || 0}">`);
+      if (simple) {
+        grid.insertAdjacentHTML("beforeend", `
+          <span>${team.name}</span>
+          <input data-score="${matchIndex}:${team.id}:tsScore" type="number" step="0.5" min="0" value="${entry.tsScore || ""}" placeholder="TS">
+          <input data-score="${matchIndex}:${team.id}:tkScore" type="number" step="0.5" min="0" value="${entry.tkScore || ""}" placeholder="TK">
+          <strong>${scoreFor(entry)}점</strong>`);
+      } else {
+        grid.insertAdjacentHTML("beforeend", `
+          <span>${team.name} · <strong>${scoreFor(entry)}점</strong></span>
+          <select data-score="${matchIndex}:${team.id}:place">
+            <option value="">-</option>
+            ${Object.keys(placementPoints()).map((place) => `<option value="${place}" ${String(entry.place) === place ? "selected" : ""}>${place}등</option>`).join("")}
+          </select>
+          <input data-score="${matchIndex}:${team.id}:day1Kills" type="number" min="0" value="${entry.day1Kills || 0}">
+          <input data-score="${matchIndex}:${team.id}:lateKills" type="number" min="0" value="${entry.lateKills || 0}">
+          <input data-score="${matchIndex}:${team.id}:penaltyDeaths" type="number" min="0" value="${entry.penaltyDeaths || 0}">`);
+      }
     });
     board.appendChild(template);
   });
@@ -2033,10 +2091,12 @@ function exportCsv() {
     ["tailChaseEnabled", state.settings.tailChaseEnabled ? "yes" : "no"],
     ["weaponGroupEnabled", state.settings.weaponGroupEnabled ? "yes" : "no"],
     ["peerlessEnabled", state.settings.peerlessEnabled ? "yes" : "no"],
+    ["tsTkScoring", state.settings.tsTkScoring ? "yes" : "no"],
+    ["groupCount", state.settings.groupCount || 1],
     ["weaponAssignments", Object.entries(state.weaponAssignments).map(([team, group]) => `${team}:${group}`).join(" / ")],
     ["placementPoints", currentScoreRule().placement.join("/")],
     [],
-    ["team", "captain", "members", "total", "match", "roomCode", "replayCode", "gameId", "place", "day1Kills", "lateKills", "penaltyDeaths", "score", "bans", "usedCharacters"]
+    ["team", "captain", "members", "total", "match", "roomCode", "replayCode", "gameId", "place", "day1Kills", "lateKills", "penaltyDeaths", "tsScore", "tkScore", "score", "bans", "usedCharacters"]
   ];
   state.teams.forEach((team) => {
     const members = team.members.map((id) => getApplicant(id)?.nickname).filter(Boolean).join(" / ");
@@ -2046,7 +2106,7 @@ function exportCsv() {
       const usedCharacters = Object.entries(entry.usedCharacters || {})
         .map(([playerId, character]) => `${getApplicant(playerId)?.nickname || playerId}:${character}`)
         .join(" / ");
-      rows.push([team.name, captain, members, teamTotal(team.id), index + 1, state.roomCodes[index] || "", state.replayCodes[index] || "", state.matchRecords[index]?.gameId || "", entry.place || "", entry.day1Kills || 0, entry.lateKills || 0, entry.penaltyDeaths || 0, scoreFor(entry), entry.bans || "", usedCharacters]);
+      rows.push([team.name, captain, members, teamTotal(team.id), index + 1, state.roomCodes[index] || "", state.replayCodes[index] || "", state.matchRecords[index]?.gameId || "", entry.place || "", entry.day1Kills || 0, entry.lateKills || 0, entry.penaltyDeaths || 0, entry.tsScore || 0, entry.tkScore || 0, scoreFor(entry), entry.bans || "", usedCharacters]);
     });
   });
   const csv = rows.map((row) => row.map((cell) => `"${String(cell ?? "").replaceAll("\"", "\"\"")}"`).join(",")).join("\n");
@@ -2155,11 +2215,15 @@ async function importGameResultCsv(event) {
       assignedTeamIds.add(team.id);
       const teamKills = Number(record["team kill"] || 0);
       const day1Kills = Number(record["down can not eliminate"] || 0);
+      const place = Number(record.rank || 0) || "";
+      const tsScore = placementPoints()[Number(place || 0)] ?? 0;
       state.scores[matchIndex][team.id] = {
         ...(state.scores[matchIndex][team.id] || {}),
-        place: Number(record.rank || 0) || "",
+        place,
         day1Kills,
         lateKills: Math.max(0, teamKills - day1Kills),
+        tsScore,
+        tkScore: teamKills,
         penaltyDeaths: Number(state.scores[matchIndex][team.id]?.penaltyDeaths || 0),
         bans: state.scores[matchIndex][team.id]?.bans || ""
       };
@@ -2487,6 +2551,10 @@ function bindEvents() {
     saveState();
   });
   $("#teamSize").addEventListener("change", () => {
+    readTeamControls();
+    saveState();
+  });
+  $("#groupCount").addEventListener("change", () => {
     readTeamControls();
     saveState();
   });
