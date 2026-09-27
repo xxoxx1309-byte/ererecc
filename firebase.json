@@ -27,7 +27,8 @@
       "*.log",
       "**/node_modules/**",
       "test-results/**",
-      "functions/**"
+      "functions/**",
+      "rank-proxy/**"
     ]
   },
   "firestore": {

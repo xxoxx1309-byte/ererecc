@@ -1,6 +1,6 @@
 const STORAGE_KEY = "er-custom-match-calculator-v2";
 const LEGACY_STORAGE_KEY = "er-scrim-calculator-v1";
-const APP_BUILD_ID = "20260927-no-api-apply-1";
+const APP_BUILD_ID = "20260928-rank-proxy-1";
 const ADMIN_SESSION_KEY = "er-admin-unlocked";
 const ADMIN_PASSWORD_HASH = "0c1a70e4512ee6f78c92820756a4026ce1f93872369624f31cf206614b2e231f";
 const API_BASE = "https://open-api.bser.io";
@@ -153,6 +153,7 @@ const TAIL_CHASE_EDITOR_EMAIL = "enlilblei@gmail.com";
 let state = loadState();
 let selectedRoles = [];
 let rankCache = null;
+let officialCurrentSeason = null;
 let seasons = [];
 let characterNames = koreanCharacterNameMap();
 let toastTimer = null;
@@ -587,6 +588,7 @@ function applyCloudState(event, applicants = []) {
   cloudLoading = true;
   state = normalizeState(cloud.stateFromEvent(event, applicants));
   state.settings.apiKey = localApiKey;
+  if (officialCurrentSeason) state.settings.seasonId = Number(officialCurrentSeason.seasonID);
   cloudEvent = event;
   bindSettings();
   render();
@@ -921,9 +923,41 @@ async function erFetch(path) {
   return json;
 }
 
+function applyCurrentSeason(season) {
+  if (!season || Number(season.isCurrent) !== 1 || !Number.isInteger(Number(season.seasonID)) || Number(season.seasonID) < 1) {
+    throw new Error("공식 현재 시즌을 확인하지 못했습니다.");
+  }
+  officialCurrentSeason = season;
+  const seasonId = Number(season.seasonID);
+  if (Number(state.settings.seasonId) !== seasonId) {
+    state.settings.seasonId = seasonId;
+    if (rankCache) {
+      $("#manualMmr").value = "";
+      $("#manualRank").value = "";
+      rankCache = null;
+      updateRankPreview({ message: "현재 시즌이 변경되었습니다. 랭크를 다시 조회해 주세요." }, "manual");
+    }
+  }
+  seasons = [season, ...seasons.filter(item => Number(item.seasonID) !== seasonId)];
+  populateSeasonSelect();
+  return seasonId;
+}
+
+async function refreshCurrentSeason() {
+  if (state.settings.apiKey) {
+    const result = await erFetch("v2/data/Season");
+    const current = (result.data || []).filter(item => Number(item.isCurrent) === 1)
+      .sort((a, b) => Number(b.seasonID) - Number(a.seasonID))[0];
+    return applyCurrentSeason(current);
+  }
+  if (cloud?.configured && cloud.currentSeason) return applyCurrentSeason(await cloud.currentSeason());
+  throw new Error("현재 시즌 정보에 연결할 수 없습니다.");
+}
+
 async function refreshApiMetadata(showMessage = false) {
   setApiStatus("loading", "API 확인 중");
   try {
+    await refreshCurrentSeason();
     if (!state.settings.apiKey) {
       if (cloud?.configured && runtimeConfig.rankLookupUrl) {
         setApiStatus("ok", "온라인 조회 가능");
@@ -946,9 +980,8 @@ async function refreshApiMetadata(showMessage = false) {
     });
     const koreanNames = await loadKoreanCharacterNames();
     koreanNames.forEach((name, code) => characterNames.set(code, name));
-    const hasSelected = seasons.some((season) => Number(season.seasonID) === Number(state.settings.seasonId));
-    if (!hasSelected) state.settings.seasonId = DEFAULT_SEASON_ID;
-    populateSeasonSelect();
+    applyCurrentSeason((seasonJson.data || []).filter(item => Number(item.isCurrent) === 1)
+      .sort((a, b) => Number(b.seasonID) - Number(a.seasonID))[0]);
     setApiStatus("ok", "API 연결됨");
     if (showMessage) toast("Open API 연결을 확인했습니다.");
     return true;
@@ -962,6 +995,8 @@ async function refreshApiMetadata(showMessage = false) {
 function populateSeasonSelect() {
   const select = $("#seasonId");
   if (!select) return;
+  select.disabled = true;
+  select.title = "공식 현재 시즌이 자동으로 반영됩니다.";
   const list = seasons.length
     ? seasons
     : [{ seasonID: state.settings.seasonId, seasonName: `Season ${Math.ceil(Number(state.settings.seasonId) / 2)}` }];
@@ -977,12 +1012,12 @@ function updateSeasonLabel() {
   const season = seasons.find((item) => Number(item.seasonID) === Number(state.settings.seasonId));
   $("#seasonLabel").textContent = season
     ? `${displaySeasonName(season)} · API ID ${season.seasonID}`
-    : `정출 시즌 12 · API ID ${state.settings.seasonId}`;
+    : `시즌 확인 중 · API ID ${state.settings.seasonId}`;
 }
 
 function displaySeasonName(season) {
   const apiSeason = Number(String(season.seasonName || "").match(/\d+/)?.[0]);
-  if (apiSeason >= 10) return `정출 시즌 ${apiSeason - 9}`;
+  if (apiSeason >= 10) return `${/pre/i.test(season.seasonName) ? "프리 시즌" : "정출 시즌"} ${apiSeason - 9}`;
   return season.seasonName || `API 시즌 ${season.seasonID}`;
 }
 
@@ -1055,7 +1090,7 @@ async function lookupRank() {
 
   updateRankPreview(null, "loading");
   try {
-    const seasonId = state.settings.seasonId;
+    const seasonId = await refreshCurrentSeason();
     const teamMode = RANK_TEAM_MODE;
     let user;
     let rankJson;
@@ -1063,6 +1098,9 @@ async function lookupRank() {
     let statsJson;
     if (useCloudLookup) {
       const result = await cloud.rankLookup({ nickname, seasonId, teamMode });
+      if (result.seasonId && Number(result.seasonId) !== seasonId) {
+        throw new Error("시즌이 변경되었습니다. 잠시 후 다시 조회해 주세요.");
+      }
       user = result.user;
       rankJson = { userRank: result.rank || {} };
       peakJson = result.peak || result.rank || {};
@@ -1090,7 +1128,9 @@ async function lookupRank() {
         wins: Number(item.wins || 0)
       }));
 
+    if (Number(state.settings.seasonId) !== seasonId) throw new Error("시즌이 변경되었습니다. 다시 조회해 주세요.");
     rankCache = {
+      seasonId,
       userId: user.userId,
       nickname,
       mmr: rankJson.userRank?.mmr ?? stats.mmr ?? 0,
@@ -1176,6 +1216,7 @@ async function syncMissingApplicantRanks() {
       button.innerHTML = `<i data-lucide="loader-circle"></i> ${updated + failed + 1}/${targets.length} 조회 중`;
       refreshIcons();
       try {
+        await refreshCurrentSeason();
         const result = await cloud.rankLookup({
           nickname: player.nickname,
           seasonId: state.settings.seasonId,
@@ -1234,8 +1275,12 @@ async function submitApplicant(event) {
   if (!cobalt && selectedRoles.length !== 3) return toast("닉네임과 역할군 3개를 모두 입력해 주세요.");
   if (!cobalt && state.settings.peerlessEnabled && playableCharacters.length < 5) return toast("피어리스 내전은 플레이 가능한 실험체를 5명 이상 입력해 주세요.");
   const canLookup = !cobalt && rankLookupAvailable();
+  if (canLookup) {
+    try { await refreshCurrentSeason(); }
+    catch (error) { return toast(error.message); }
+  }
   const cachedNickname = String(rankCache?.nickname || "").trim().toLowerCase();
-  if (canLookup && cachedNickname !== nickname.toLowerCase()) {
+  if (canLookup && (cachedNickname !== nickname.toLowerCase() || rankCache?.seasonId !== Number(state.settings.seasonId))) {
     const submitButton = $("#submitApplicant");
     submitButton.disabled = true;
     const lookup = await lookupRank();
@@ -3134,6 +3179,12 @@ async function bootstrap() {
   setView(currentView, false);
   await initializeCloud();
   await refreshApiMetadata();
+  if (cloud?.subscribeCurrentSeason) {
+    cloud.subscribeCurrentSeason(
+      season => applyCurrentSeason(season),
+      error => console.warn("Season subscription failed", error.message)
+    );
+  }
 }
 
 document.addEventListener("visibilitychange", () => {

@@ -174,6 +174,31 @@
       stateFromEvent,
       applicantFromRow: applicantFromDoc,
 
+      async currentSeason() {
+        if (config.rankLookupUrl) {
+          const response = await fetch(config.rankLookupUrl, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ action: "currentSeason" })
+          });
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok || data.error || !data.season) {
+            throw new Error(data.error || "현재 시즌 정보를 불러오지 못했습니다.");
+          }
+          return data.season;
+        }
+        const doc = await db.collection("publicMetadata").doc("currentSeason").get({ source: "server" });
+        if (!doc.exists) throw new Error("현재 시즌 정보를 준비 중입니다. 잠시 후 다시 조회해 주세요.");
+        return doc.data();
+      },
+
+      subscribeCurrentSeason(callback, onError) {
+        if (config.rankLookupUrl) return () => {};
+        return db.collection("publicMetadata").doc("currentSeason").onSnapshot(
+          (doc) => { if (doc.exists) callback(doc.data()); }, onError
+        );
+      },
+
       async session() {
         await auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
         if (!auth.currentUser) await auth.signInAnonymously();
@@ -394,7 +419,7 @@
       },
 
       async rankLookup(payload) {
-        if (!config.rankLookupUrl) throw new Error("Firebase Functions rankLookup URL을 config.js에 설정해 주세요.");
+        if (!config.rankLookupUrl) throw new Error("온라인 랭크 조회 주소가 설정되지 않았습니다.");
         const response = await fetch(config.rankLookupUrl, {
           method: "POST",
           headers: { "content-type": "application/json" },

@@ -8,5 +8,5 @@ window.ER_CONFIG = {
     appId: "1:413844642260:web:5ec5ab2d3394b1ef5f5e41"
   },
   ownerEmails: ["xxoxx1309@gmail.com"],
-  rankLookupUrl: ""
+  rankLookupUrl: "https://ererecc-rank-api.vercel.app/api/rank"
 };
