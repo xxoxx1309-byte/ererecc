@@ -1,5 +1,6 @@
 const STORAGE_KEY = "er-custom-match-calculator-v2";
 const LEGACY_STORAGE_KEY = "er-scrim-calculator-v1";
+const APP_BUILD_ID = "20260927-scoreboard-3";
 const API_BASE = "https://open-api.bser.io";
 const DEFAULT_SEASON_ID = 41;
 const RANK_TEAM_MODE = 3;
@@ -398,6 +399,7 @@ function cloudApplyUrl(event = cloudEvent) {
   const url = new URL(location.href);
   url.search = "";
   url.hash = "apply";
+  url.searchParams.set("v", APP_BUILD_ID);
   url.searchParams.set("event", event.slug);
   return url.toString();
 }
@@ -648,6 +650,7 @@ async function loadAdminCloudEvent(eventId) {
     cloudBackups = await cloud.listBackups(event.id);
     renderBackupControls();
     const url = new URL(location.href);
+    url.searchParams.set("v", APP_BUILD_ID);
     url.searchParams.set("event", event.slug);
     url.hash = "admin";
     history.replaceState(null, "", url);
