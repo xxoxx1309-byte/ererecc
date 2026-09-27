@@ -315,6 +315,9 @@ main {
   gap: 18px;
 }
 
+.workspace-grid.manual-registration-only { grid-template-columns: minmax(0, 1fr); }
+.workspace-grid.manual-registration-only .registration-panel { width: 100%; }
+
 .panel {
   min-width: 0;
   padding: 22px;

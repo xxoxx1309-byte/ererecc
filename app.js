@@ -1,6 +1,6 @@
 const STORAGE_KEY = "er-custom-match-calculator-v2";
 const LEGACY_STORAGE_KEY = "er-scrim-calculator-v1";
-const APP_BUILD_ID = "20260927-admin-pin-1";
+const APP_BUILD_ID = "20260927-no-api-apply-1";
 const ADMIN_SESSION_KEY = "er-admin-unlocked";
 const ADMIN_PASSWORD_HASH = "0c1a70e4512ee6f78c92820756a4026ce1f93872369624f31cf206614b2e231f";
 const API_BASE = "https://open-api.bser.io";
@@ -994,6 +994,10 @@ function setApiStatus(type, text) {
   dot.className = `api-dot ${type === "loading" ? "" : type}`;
 }
 
+function rankLookupAvailable() {
+  return Boolean(state.settings.apiKey || (cloud?.configured && cloudEvent && runtimeConfig.rankLookupUrl));
+}
+
 function renderRoles() {
   const wrap = $("#roleButtons");
   wrap.innerHTML = "";
@@ -1013,12 +1017,14 @@ function renderRoles() {
 function renderApplyMode() {
   const cobalt = isCobaltEvent();
   const peerless = state.settings.peerlessEnabled === true && !cobalt;
-  $("#lookupRank").hidden = cobalt;
+  const canLookupRank = !cobalt && rankLookupAvailable();
+  $("#lookupRank").hidden = !canLookupRank;
   $("#roleApplyBlock").hidden = cobalt;
   $("#manualApplyBlock").hidden = cobalt;
   $("#peerlessApplyBox").hidden = !peerless;
   $("#cobaltApplyBox").hidden = true;
-  $("#rankApplyPanel").hidden = cobalt;
+  $("#rankApplyPanel").hidden = !canLookupRank;
+  $("#applicants").classList.toggle("manual-registration-only", !cobalt && !canLookupRank);
   $(".registration-panel .section-number").textContent = cobalt ? "COBALT" : "01";
   $(".registration-panel h2").textContent = cobalt ? "코발트 참가 등록" : "참가자 등록";
   $("#nickname").placeholder = cobalt ? "인게임 닉네임" : "닉네임을 정확히 입력";
@@ -1227,7 +1233,7 @@ async function submitApplicant(event) {
   if (!nickname) return toast("인게임 닉네임을 입력해 주세요.");
   if (!cobalt && selectedRoles.length !== 3) return toast("닉네임과 역할군 3개를 모두 입력해 주세요.");
   if (!cobalt && state.settings.peerlessEnabled && playableCharacters.length < 5) return toast("피어리스 내전은 플레이 가능한 실험체를 5명 이상 입력해 주세요.");
-  const canLookup = !cobalt && Boolean((cloud?.configured && cloudEvent) || state.settings.apiKey);
+  const canLookup = !cobalt && rankLookupAvailable();
   const cachedNickname = String(rankCache?.nickname || "").trim().toLowerCase();
   if (canLookup && cachedNickname !== nickname.toLowerCase()) {
     const submitButton = $("#submitApplicant");
@@ -2622,7 +2628,7 @@ function bindEvents() {
   });
   $("#lookupRank").addEventListener("click", lookupRank);
   $("#nickname").addEventListener("keydown", (event) => {
-    if (event.key === "Enter" && (state.settings.apiKey || (cloud?.configured && cloudEvent))) {
+    if (event.key === "Enter" && rankLookupAvailable()) {
       event.preventDefault();
       lookupRank();
     }
