@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#fffdf8">
   <title>이터널 리턴 내전 계산기</title>
   <link rel="icon" type="image/svg+xml" href="./favicon.svg">
-  <link rel="stylesheet" href="./style.css?v=20260927-site-operators-2">
+  <link rel="stylesheet" href="./style.css?v=20260927-admin-pin-1">
 </head>
 <body>
   <header class="topbar">
@@ -488,6 +488,26 @@
     </section>
   </main>
 
+  <dialog id="adminAccessDialog" class="admin-access-dialog">
+    <form id="adminAccessForm" class="settings-dialog admin-access-form">
+      <div class="admin-access-icon" aria-hidden="true"><i data-lucide="lock-keyhole"></i></div>
+      <div class="admin-access-copy">
+        <p class="eyebrow">ADMIN ACCESS</p>
+        <h2>관리자 비밀번호</h2>
+        <p>내전 관리 화면을 열려면 비밀번호를 입력하세요.</p>
+      </div>
+      <label class="admin-password-field">
+        <span>비밀번호</span>
+        <input id="adminPassword" type="password" inputmode="numeric" maxlength="4" autocomplete="off" required placeholder="4자리 입력">
+      </label>
+      <p id="adminPasswordError" class="form-error" role="alert" hidden></p>
+      <div class="admin-access-actions">
+        <button id="cancelAdminAccess" class="secondary" type="button">취소</button>
+        <button id="unlockAdmin" class="primary" type="submit"><i data-lucide="unlock-keyhole"></i> 관리자 화면 열기</button>
+      </div>
+    </form>
+  </dialog>
+
   <dialog id="applicantEditDialog">
     <form id="applicantEditForm" class="settings-dialog">
       <div class="dialog-head">
@@ -677,8 +697,8 @@
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
-  <script src="./cloud.js?v=20260927-site-operators-2"></script>
+  <script src="./cloud.js?v=20260927-admin-pin-1"></script>
   <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
-  <script src="./app.js?v=20260927-site-operators-2"></script>
+  <script src="./app.js?v=20260927-admin-pin-1"></script>
 </body>
 </html>

@@ -1,6 +1,8 @@
 const STORAGE_KEY = "er-custom-match-calculator-v2";
 const LEGACY_STORAGE_KEY = "er-scrim-calculator-v1";
-const APP_BUILD_ID = "20260927-site-operators-2";
+const APP_BUILD_ID = "20260927-admin-pin-1";
+const ADMIN_SESSION_KEY = "er-admin-unlocked";
+const ADMIN_PASSWORD_HASH = "0c1a70e4512ee6f78c92820756a4026ce1f93872369624f31cf206614b2e231f";
 const API_BASE = "https://open-api.bser.io";
 const DEFAULT_SEASON_ID = 41;
 const RANK_TEAM_MODE = 3;
@@ -178,6 +180,7 @@ let cloudCreateOpen = false;
 let editingApplicantId = null;
 let cloudAnonymousError = "";
 let activeScoreRound = 0;
+let adminUnlocked = sessionStorage.getItem(ADMIN_SESSION_KEY) === "1";
 
 const $ = (selector) => document.querySelector(selector);
 
@@ -2102,7 +2105,28 @@ function renderOverview() {
   updateSeasonLabel();
 }
 
+function showAdminAccessDialog() {
+  const dialog = $("#adminAccessDialog");
+  if (!dialog || dialog.open) return;
+  dialog.showModal();
+  $("#adminPassword").value = "";
+  $("#adminPasswordError").hidden = true;
+  requestAnimationFrame(() => $("#adminPassword").focus());
+}
+
 function setView(view, updateHash = true) {
+  if (view === "admin" && !adminUnlocked) {
+    currentView = "apply";
+    document.body.dataset.view = currentView;
+    document.querySelectorAll("[data-view-target]").forEach((button) => {
+      button.classList.toggle("active", button.dataset.viewTarget === currentView);
+    });
+    document.querySelectorAll("[data-view-panel]").forEach((panel) => {
+      panel.hidden = panel.dataset.viewPanel !== currentView;
+    });
+    showAdminAccessDialog();
+    return false;
+  }
   currentView = view === "admin" ? "admin" : "apply";
   document.body.dataset.view = currentView;
   document.querySelectorAll("[data-view-target]").forEach((button) => {
@@ -2112,6 +2136,13 @@ function setView(view, updateHash = true) {
     panel.hidden = panel.dataset.viewPanel !== currentView;
   });
   if (updateHash) history.replaceState(null, "", currentView === "admin" ? "#admin" : "#apply");
+  return true;
+}
+
+async function sha256(value) {
+  const bytes = new TextEncoder().encode(value);
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
 function renderNotice() {
@@ -2386,6 +2417,31 @@ async function deleteCloudBackup() {
 }
 
 function bindEvents() {
+  $("#adminAccessForm").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const input = $("#adminPassword");
+    const error = $("#adminPasswordError");
+    const submit = $("#unlockAdmin");
+    submit.disabled = true;
+    try {
+      if (await sha256(input.value) !== ADMIN_PASSWORD_HASH) {
+        error.textContent = "비밀번호가 올바르지 않습니다.";
+        error.hidden = false;
+        input.select();
+        return;
+      }
+      adminUnlocked = true;
+      sessionStorage.setItem(ADMIN_SESSION_KEY, "1");
+      $("#adminAccessDialog").close();
+      setView("admin");
+    } finally {
+      submit.disabled = false;
+    }
+  });
+  $("#cancelAdminAccess").addEventListener("click", () => {
+    $("#adminAccessDialog").close();
+    setView("apply");
+  });
   document.querySelectorAll("[data-view-target]").forEach((button) => {
     button.addEventListener("click", () => {
       if (button.dataset.viewTarget === "apply" && cloud?.configured && !cloudEvent) {
