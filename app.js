@@ -134,6 +134,9 @@ const DEFAULT_SCORE_RULE = {
   lateKill: 1,
   penaltyDeath: 1
 };
+const HANGUL_INITIAL_ORDER = ["ㄱ", "ㄴ", "ㄷ", "ㄹ", "ㅁ", "ㅂ", "ㅅ", "ㅇ", "ㅈ", "ㅊ", "ㅋ", "ㅌ", "ㅍ", "ㅎ"];
+const HANGUL_CHO = ["ㄱ", "ㄲ", "ㄴ", "ㄷ", "ㄸ", "ㄹ", "ㅁ", "ㅂ", "ㅃ", "ㅅ", "ㅆ", "ㅇ", "ㅈ", "ㅉ", "ㅊ", "ㅋ", "ㅌ", "ㅍ", "ㅎ"];
+const KOREAN_CHARACTERS = new Set(["현우", "혜진", "수아", "요한", "유민", "헤이즈", "비형"]);
 const COBALT_POSITIONS = {
   front: "앞라인",
   skirmish: "교전",
@@ -171,6 +174,7 @@ let cloudSaveTimer = null;
 let cloudLoading = false;
 let cloudCreateOpen = false;
 let editingApplicantId = null;
+let cloudAnonymousError = "";
 
 const $ = (selector) => document.querySelector(selector);
 
@@ -192,6 +196,7 @@ function defaultState() {
       tailChaseEnabled: false,
       weaponGroupEnabled: false,
       peerlessEnabled: false,
+      hangulDayEnabled: false,
       tsTkScoring: false,
       tournamentScoring: true,
       scoreRule: structuredClone(DEFAULT_SCORE_RULE)
@@ -371,6 +376,7 @@ function canViewCloudEvent() {
 
 function canManageCloudEvent() {
   if (!canViewCloudEvent()) return false;
+  if (cloudEvent.owner_id && cloudEvent.owner_id !== sessionUserId()) return false;
   if (isSiteOwner()) return true;
   if (cloudEvent.slug !== TAIL_CHASE_EVENT_SLUG) return true;
   return String(cloudSession?.user?.email || "").trim().toLowerCase() === TAIL_CHASE_EDITOR_EMAIL;
@@ -480,6 +486,7 @@ function renderCloudControls() {
   $("#cloudUnavailable").hidden = configured;
   $("#adminLoginForm").hidden = !configured || Boolean(cloudSession);
   $("#cloudWorkspace").hidden = !configured || !cloudSession;
+  $("#adminSignOut").hidden = Boolean(cloudSession?.user?.isAnonymous);
   updateViewAvailability();
   if (!configured) {
     setCloudStatus("브라우저 저장 모드", "manual");
@@ -487,12 +494,12 @@ function renderCloudControls() {
     return refreshIcons();
   }
   if (!cloudSession) {
-    setCloudStatus("관리자 로그인 필요", "manual");
+    setCloudStatus(cloudAnonymousError ? "자동 관리 설정 필요" : "관리 공간 준비 중", cloudAnonymousError ? "error" : "manual");
     updateApplicationAvailability();
     return refreshIcons();
   }
 
-  $("#adminAccount").textContent = sessionUserEmail() || "관리자";
+  $("#adminAccount").textContent = cloudSession.user?.isAnonymous ? "이 브라우저의 내전" : (sessionUserEmail() || "관리자");
   const authorized = Boolean(cloudOperator);
   $("#cloudUnauthorized").hidden = authorized;
   $("#eventManagementTools").hidden = !authorized;
@@ -701,7 +708,9 @@ async function handleCloudSession(session, preserveApplyView = false) {
     renderCloudControls();
     return;
   }
-  cloudOperator = await cloud.operatorProfile(sessionUserEmail(session));
+  cloudOperator = session.user?.isAnonymous
+    ? { id: sessionUserId(session), email: "", is_owner: false, is_guest: true }
+    : await cloud.operatorProfile(sessionUserEmail(session));
   cloudOperators = isSiteOwner() ? await cloud.listOperators() : [];
   if (cloudOperator) await refreshCloudEvents(cloudEvent?.id || "", !preserveApplyView);
   else cloudEvents = [];
@@ -721,7 +730,14 @@ async function initializeCloud() {
   renderCloudControls();
   if (!cloud.configured) return;
   if (!cloudEventSlug()) resetCloudLandingState();
-  cloudSession = await cloud.session();
+  try {
+    cloudSession = await cloud.session();
+    cloudAnonymousError = "";
+  } catch (error) {
+    cloudSession = null;
+    cloudAnonymousError = friendlyAuthError(error);
+    toast("자동 관리 시작을 위해 Firebase 익명 로그인을 활성화해 주세요. 지금은 Google 로그인도 사용할 수 있습니다.");
+  }
   cloud.onAuthChange((session) => {
     if (sessionUserId(session) === sessionUserId(cloudSession)) return;
     handleCloudSession(session).catch((error) => toast(error.message));
@@ -766,6 +782,7 @@ function bindSettings() {
   $("#tailChaseEnabled").checked = state.settings.tailChaseEnabled === true;
   $("#weaponGroupEnabled").checked = state.settings.weaponGroupEnabled === true;
   $("#peerlessEnabled").checked = state.settings.peerlessEnabled === true;
+  $("#hangulDayEnabled").checked = state.settings.hangulDayEnabled === true;
   $("#tsTkScoring").checked = state.settings.tsTkScoring === true;
   $("#tournamentScoring").checked = state.settings.tournamentScoring !== false;
   $("#placementPoints").value = currentScoreRule().placement.join(",");
@@ -808,6 +825,7 @@ function readSettings() {
     tailChaseEnabled: $("#tailChaseEnabled").checked,
     weaponGroupEnabled: $("#weaponGroupEnabled").checked,
     peerlessEnabled: $("#peerlessEnabled").checked,
+    hangulDayEnabled: $("#hangulDayEnabled").checked,
     tsTkScoring: $("#tsTkScoring").checked,
     tournamentScoring: $("#tournamentScoring").checked,
     scoreRule: {
@@ -827,6 +845,13 @@ function readSettings() {
     rules: $("#eventRules").value.trim()
   };
   if (state.settings.peerlessEnabled) state.settings.matchCount = 3;
+  if (state.settings.hangulDayEnabled && !cobaltMode) {
+    state.settings.teamMode = 3;
+    state.settings.teamSize = 3;
+    state.settings.tournamentScoring = true;
+    state.settings.tsTkScoring = false;
+    state.settings.scoreRule = structuredClone(DEFAULT_SCORE_RULE);
+  }
   syncMatchArrays();
 }
 
@@ -1367,10 +1392,41 @@ function scoreFor(entry = {}) {
   }
   const rule = currentScoreRule();
   const placeScore = placementPoints()[Number(entry.place || 0)] ?? 0;
-  return placeScore
+  const baseScore = placeScore
     + Number(entry.day1Kills || 0) * rule.day1Kill
     + Number(entry.lateKills || 0) * rule.lateKill
     - Number(entry.penaltyDeaths || 0) * rule.penaltyDeath;
+  return baseScore + (state.settings.hangulDayEnabled === true ? hangulDayBonus(entry).total : 0);
+}
+
+function initialConsonant(name) {
+  const first = String(name || "").trim().charAt(0);
+  if (!first) return "";
+  const code = first.charCodeAt(0);
+  if (code >= 0xac00 && code <= 0xd7a3) return HANGUL_CHO[Math.floor((code - 0xac00) / 588)] || "";
+  return HANGUL_CHO.includes(first) ? first : "";
+}
+
+function hangulDayBonus(entry = {}) {
+  const characters = Array.from({ length: 3 }, (_, index) => String(entry.hangulCharacters?.[index] || "").trim());
+  const initials = characters.map(initialConsonant);
+  let comboType = "";
+  let combo = 0;
+  if (initials.every(Boolean)) {
+    if (new Set(initials).size === 1) {
+      comboType = `같은 초성 ${initials.join("")}`;
+      combo = 2;
+    } else {
+      const positions = initials.map((initial) => HANGUL_INITIAL_ORDER.indexOf(initial)).sort((a, b) => a - b);
+      if (positions[0] >= 0 && positions[1] === positions[0] + 1 && positions[2] === positions[1] + 1) {
+        comboType = `연속 초성 ${positions.map((position) => HANGUL_INITIAL_ORDER[position]).join("")}`;
+        combo = 3;
+      }
+    }
+  }
+  const koreanCount = characters.filter((name) => KOREAN_CHARACTERS.has(name.replace(/\s+/g, ""))).length;
+  const nationality = koreanCount === 3 ? 6 : koreanCount;
+  return { characters, initials, comboType, combo, koreanCount, nationality, total: combo + nationality };
 }
 
 function teamTotal(teamId) {
@@ -1615,11 +1671,46 @@ function renderScores() {
   renderScoreSummary();
   renderGroupScoreSummary();
   renderMatchCards();
+  renderHangulDayBoard();
   renderPeerlessBoard();
   renderBanBoard();
   renderRoundBanSummary();
   renderBanSummary();
   renderScoreRules();
+}
+
+function renderHangulDayBoard() {
+  const board = $("#hangulDayBoard");
+  if (!board) return;
+  if (state.settings.hangulDayEnabled !== true) {
+    board.innerHTML = "";
+    return;
+  }
+  if (!state.teams.length) {
+    board.innerHTML = `<p class="note">팀을 편성하면 한글날 보너스 입력표가 표시됩니다.</p>`;
+    return;
+  }
+  board.innerHTML = `<section class="hangul-day-panel">
+    <div class="hangul-day-head">
+      <div><h3>한글날 가나다 보너스</h3><p>실험체 이름 3명을 입력하면 초성과 한국인 보너스를 자동 계산합니다. 입력 순서는 관계없습니다.</p></div>
+      <span>초성 + 국적</span>
+    </div>
+    <div class="table-wrap"><table class="sheet-table hangul-day-table">
+      <thead><tr><th>경기</th><th>팀</th><th colspan="3">사용 실험체</th><th>초성</th><th>한국인</th><th>보너스</th></tr></thead>
+      <tbody>${state.scores.map((match, matchIndex) => state.teams.map((team) => {
+        const entry = match[team.id] || {};
+        const bonus = hangulDayBonus(entry);
+        return `<tr>
+          <th>${matchIndex + 1}경기</th><th>${escapeHtml(team.name)}</th>
+          ${bonus.characters.map((name, characterIndex) => `<td><input data-hangul-pick="${matchIndex}:${team.id}:${characterIndex}" value="${escapeHtml(name)}" placeholder="실험체 ${characterIndex + 1}"></td>`).join("")}
+          <td>${escapeHtml(bonus.comboType || (bonus.initials.filter(Boolean).join("") || "-"))}${bonus.combo ? ` <strong>+${bonus.combo}</strong>` : ""}</td>
+          <td>${bonus.koreanCount ? `${bonus.koreanCount}명 <strong>+${bonus.nationality}</strong>` : "-"}</td>
+          <td><strong>+${bonus.total}</strong></td>
+        </tr>`;
+      }).join("")).join("")}</tbody>
+    </table></div>
+    <p class="hangul-day-note">한국인 판정: 현우 · 혜진 · 수아 · 요한 · 유민 · 헤이즈 · 비형</p>
+  </section>`;
 }
 
 function renderReplayCodes() {
@@ -1821,7 +1912,7 @@ function renderBanSummary() {
 
 function renderScoreRules() {
   const rule = currentScoreRule();
-  $("#scoreRuleBox").innerHTML = `<h3>점수룰</h3><p>1일차 킬 ${rule.day1Kill}점</p><p>이후 킬 ${rule.lateKill}점</p><p>금구사 -${rule.penaltyDeath}점</p>`;
+  $("#scoreRuleBox").innerHTML = `<h3>점수룰</h3><p>1일차 킬 ${rule.day1Kill}점</p><p>이후 킬 ${rule.lateKill}점</p><p>금구사 -${rule.penaltyDeath}점</p>${state.settings.hangulDayEnabled ? "<p><strong>한글날 보너스 자동 합산</strong></p>" : ""}`;
   $("#rankRuleBox").innerHTML = `<h3>등수 점수</h3>${rule.placement.map((point, index) => `<div><span>${index + 1}등</span><strong>${point}</strong></div>`).join("")}`;
 }
 
@@ -2008,6 +2099,13 @@ function renderHouseRulesSummary() {
         <p>참가자는 플레이 가능한 실험체를 5명 이상 제출하고, 이전 경기에서 사용한 실험체는 다시 사용할 수 없습니다. 최종 결과는 3경기 대회 점수 합산으로 계산합니다.</p>
       </article>`);
   }
+  if (state.settings.hangulDayEnabled) {
+    blocks.push(`
+      <article class="house-rule-summary-row">
+        <strong>한글날 가나다 내전</strong>
+        <p>3인 스쿼드의 실험체 첫 글자 초성이 모두 같으면 +2점, 기본 초성 순서에서 연속하면 +3점입니다. 현우·혜진·수아·요한·유민·헤이즈·비형은 1명당 +1점이며, 세 명 모두 해당하면 +6점입니다.</p>
+      </article>`);
+  }
   section.classList.toggle("empty-house-rules", !blocks.length);
   $("#houseRulesDisplay").innerHTML = blocks.join("");
 }
@@ -2036,12 +2134,13 @@ function exportCsv() {
     ["tailChaseEnabled", state.settings.tailChaseEnabled ? "yes" : "no"],
     ["weaponGroupEnabled", state.settings.weaponGroupEnabled ? "yes" : "no"],
     ["peerlessEnabled", state.settings.peerlessEnabled ? "yes" : "no"],
+    ["hangulDayEnabled", state.settings.hangulDayEnabled ? "yes" : "no"],
     ["tsTkScoring", state.settings.tsTkScoring ? "yes" : "no"],
     ["groupCount", state.settings.groupCount || 1],
     ["weaponAssignments", Object.entries(state.weaponAssignments).map(([team, group]) => `${team}:${group}`).join(" / ")],
     ["placementPoints", currentScoreRule().placement.join("/")],
     [],
-    ["team", "captain", "members", "total", "match", "roomCode", "replayCode", "gameId", "place", "day1Kills", "lateKills", "penaltyDeaths", "tsScore", "tkScore", "score", "bans", "usedCharacters"]
+    ["team", "captain", "members", "total", "match", "roomCode", "replayCode", "gameId", "place", "day1Kills", "lateKills", "penaltyDeaths", "tsScore", "tkScore", "hangulCharacters", "hangulComboBonus", "koreanBonus", "score", "bans", "usedCharacters"]
   ];
   state.teams.forEach((team) => {
     const members = team.members.map((id) => getApplicant(id)?.nickname).filter(Boolean).join(" / ");
@@ -2051,7 +2150,8 @@ function exportCsv() {
       const usedCharacters = Object.entries(entry.usedCharacters || {})
         .map(([playerId, character]) => `${getApplicant(playerId)?.nickname || playerId}:${character}`)
         .join(" / ");
-      rows.push([team.name, captain, members, teamTotal(team.id), index + 1, state.roomCodes[index] || "", state.replayCodes[index] || "", state.matchRecords[index]?.gameId || "", entry.place || "", entry.day1Kills || 0, entry.lateKills || 0, entry.penaltyDeaths || 0, entry.tsScore || 0, entry.tkScore || 0, scoreFor(entry), entry.bans || "", usedCharacters]);
+      const hangulBonus = hangulDayBonus(entry);
+      rows.push([team.name, captain, members, teamTotal(team.id), index + 1, state.roomCodes[index] || "", state.replayCodes[index] || "", state.matchRecords[index]?.gameId || "", entry.place || "", entry.day1Kills || 0, entry.lateKills || 0, entry.penaltyDeaths || 0, entry.tsScore || 0, entry.tkScore || 0, hangulBonus.characters.join(" / "), hangulBonus.combo, hangulBonus.nationality, scoreFor(entry), entry.bans || "", usedCharacters]);
     });
   });
   const csv = rows.map((row) => row.map((cell) => `"${String(cell ?? "").replaceAll("\"", "\"\"")}"`).join(",")).join("\n");
@@ -2532,6 +2632,7 @@ function bindEvents() {
   $("#cancelApplicantEdit").addEventListener("click", () => $("#applicantEditDialog").close());
   $("#applicantEditForm").addEventListener("submit", saveApplicantEdit);
   $("#scoreBoard").addEventListener("change", updateScore);
+  $("#hangulDayBoard").addEventListener("change", updateHangulDayPick);
   $("#peerlessBoard").addEventListener("change", updatePeerlessPick);
   $("#banBoard").addEventListener("change", updateBan);
   $("#replayBoard").addEventListener("change", updateReplay);
@@ -2556,6 +2657,17 @@ function updateScore(event) {
   if (!token) return;
   const [matchIndex, teamId, field] = token.split(":");
   state.scores[Number(matchIndex)][teamId][field] = event.target.value;
+  saveState();
+}
+
+function updateHangulDayPick(event) {
+  const token = event.target.dataset.hangulPick;
+  if (!token) return;
+  const [matchIndex, teamId, characterIndex] = token.split(":");
+  const entry = state.scores[Number(matchIndex)]?.[teamId];
+  if (!entry) return;
+  entry.hangulCharacters = Array.from({ length: 3 }, (_, index) => String(entry.hangulCharacters?.[index] || ""));
+  entry.hangulCharacters[Number(characterIndex)] = event.target.value.trim();
   saveState();
 }
 

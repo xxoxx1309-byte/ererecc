@@ -8,6 +8,7 @@ config.local.json
 .env
 .env.*
 functions/node_modules/
+test-results/
 functions/.env
 .firebase/
 supabase/

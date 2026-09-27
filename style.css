@@ -1293,3 +1293,33 @@ legend { padding: 0 7px; font-size: 15px; }
   .top-actions { gap: 2px; }
   .icon-button { width: 36px; min-height: 36px; }
 }
+.hangul-day-panel {
+  margin-top: 20px;
+  border: 1px solid #f1c76c;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #fffdf7;
+}
+
+.hangul-day-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 18px 20px;
+  background: linear-gradient(135deg, #fff1df, #fff9cc);
+  border-bottom: 1px solid #f1c76c;
+}
+
+.hangul-day-head h3,
+.hangul-day-head p { margin: 0; }
+.hangul-day-head p { margin-top: 4px; color: #675947; }
+.hangul-day-head > span { font-weight: 800; color: #9b312b; white-space: nowrap; }
+.hangul-day-table input { min-width: 92px; }
+.hangul-day-table strong { color: #b52c2f; }
+.hangul-day-note { margin: 0; padding: 12px 20px; color: #675947; border-top: 1px solid #f3dfb1; }
+
+@media (max-width: 760px) {
+  .hangul-day-head { align-items: flex-start; flex-direction: column; }
+  .hangul-day-table { min-width: 980px; }
+}

@@ -74,12 +74,12 @@
         <button class="google-login-button" id="googleLoginButton" type="button">
           <span aria-hidden="true">G</span> Google로 로그인
         </button>
-        <p>운영자로 등록된 Google 계정으로 로그인하세요. 참가자는 로그인 없이 신청할 수 있습니다.</p>
+        <p>자동 관리 세션을 시작하지 못했습니다. Firebase 익명 로그인을 켜기 전에는 기존 Google 계정으로 관리할 수 있습니다.</p>
       </form>
 
       <div id="cloudWorkspace" class="cloud-workspace" hidden>
         <div class="cloud-account-row">
-          <span id="adminAccount"></span>
+          <span id="adminAccount">이 브라우저의 내전</span>
           <button class="text-button" id="adminSignOut" type="button">
             <i data-lucide="log-out"></i> 로그아웃
           </button>
@@ -431,6 +431,7 @@
       <div id="scoreSummary" class="score-summary"></div>
       <div id="groupScoreSummary" class="group-score-summary"></div>
       <div id="scoreBoard" class="score-board"></div>
+      <div id="hangulDayBoard" class="hangul-day-board"></div>
       <div id="peerlessBoard" class="peerless-board"></div>
       <details class="ban-details">
         <summary><i data-lucide="shield-ban"></i> 밴 페이즈 기록</summary>
@@ -623,6 +624,10 @@
             <input id="peerlessEnabled" type="checkbox">
             피어리스 내전 적용
           </label>
+          <label class="option-check">
+            <input id="hangulDayEnabled" type="checkbox">
+            한글날 가나다 내전 적용
+          </label>
         </div>
         <p class="note">필요한 규칙만 선택하면 신청 화면과 관리자 운영 도구에 함께 표시됩니다.</p>
       </fieldset>
@@ -672,8 +677,8 @@
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
-  <script src="./cloud.js?v=20260907-firebase-1"></script>
+  <script src="./cloud.js?v=20260927-hangul-1"></script>
   <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
-  <script src="./app.js?v=20260907-firebase-1"></script>
+  <script src="./app.js?v=20260927-hangul-1"></script>
 </body>
 </html>

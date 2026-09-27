@@ -174,6 +174,7 @@
 
       async session() {
         await auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
+        if (!auth.currentUser) await auth.signInAnonymously();
         return auth.currentUser ? { user: auth.currentUser } : null;
       },
 
@@ -193,6 +194,9 @@
       },
 
       async operatorProfile(email) {
+        if (auth.currentUser?.isAnonymous) {
+          return { id: auth.currentUser.uid, email: "", is_owner: false, is_guest: true, created_at: null };
+        }
         const normalized = normalizeEmail(email);
         if (!normalized) return null;
         const doc = await operators().doc(normalized).get();
@@ -244,7 +248,8 @@
       },
 
       async listEvents() {
-        const snapshot = await events().orderBy("updated_at", "desc").get();
+        if (!auth.currentUser) return [];
+        const snapshot = await events().where("owner_id", "==", auth.currentUser.uid).get();
         return snapshot.docs.map(eventFromDoc);
       },
 
