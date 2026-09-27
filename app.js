@@ -1204,8 +1204,8 @@ function teamModeLabel() {
 
 async function syncMissingApplicantRanks() {
   if (!canManageCloudEvent()) return toast("이 내전의 참가자 정보를 수정할 권한이 없습니다.");
-  const targets = state.applicants.filter((player) => !player.currentMmr && !player.rank);
-  if (!targets.length) return toast("랭크 정보가 누락된 참가자가 없습니다.");
+  const targets = state.applicants.filter((player) => String(player.nickname || "").trim());
+  if (!targets.length) return toast("갱신할 참가자가 없습니다.");
 
   const button = $("#syncApplicantRanks");
   button.disabled = true;
@@ -1261,7 +1261,7 @@ async function syncMissingApplicantRanks() {
     toast(`랭크 ${updated}명 갱신${failed ? ` · ${failed}명 실패` : ""}`);
   } finally {
     button.disabled = false;
-    button.innerHTML = `<i data-lucide="scan-search"></i> 누락 랭크 조회`;
+    button.innerHTML = `<i data-lucide="scan-search"></i> 전체 랭크 갱신`;
     refreshIcons();
   }
 }
