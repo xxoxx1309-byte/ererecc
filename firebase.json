@@ -12,6 +12,7 @@
       "supabase/**",
       "firebase-debug.log",
       "firebase-home.png",
+      "reference-scoreboard.png",
       "*.log",
       "**/node_modules/**",
       "test-results/**",

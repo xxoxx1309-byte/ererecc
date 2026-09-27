@@ -137,6 +137,7 @@ const DEFAULT_SCORE_RULE = {
 const HANGUL_INITIAL_ORDER = ["ㄱ", "ㄴ", "ㄷ", "ㄹ", "ㅁ", "ㅂ", "ㅅ", "ㅇ", "ㅈ", "ㅊ", "ㅋ", "ㅌ", "ㅍ", "ㅎ"];
 const HANGUL_CHO = ["ㄱ", "ㄲ", "ㄴ", "ㄷ", "ㄸ", "ㄹ", "ㅁ", "ㅂ", "ㅃ", "ㅅ", "ㅆ", "ㅇ", "ㅈ", "ㅉ", "ㅊ", "ㅋ", "ㅌ", "ㅍ", "ㅎ"];
 const KOREAN_CHARACTERS = new Set(["현우", "혜진", "수아", "요한", "유민", "헤이즈", "비형"]);
+const DEFAULT_ROOM_SETTINGS_CODE = "fVNNT8MwDP0vOfcyxAHtNnUdk2BjWgdIIA5e47bR8lGcZGKa9t9JWYm6UXFpG/vZfn3PObKF4cjGLPXWGcUSNpNQWTY+shR0JoUSGhyu0XoiLJwwmo0deUzYpChQIkE/lilzPpYgbThPUcJhjU14xthccFyKYqdBYaz7agit7ZfmDfWKnvVkD0LCVuJVu0BTG5fWoCvcmKetRdojxXQsy2wBTRy4QVBLr7ZIee3LUsZESsiFG/rfR6/EUHyDqsmhxDejB3VaY4W60+nhunXH8kVYETi2rB6ElFN0gXUcYDy1YmmXF4bwbFjXW5SDXHP89AEvQAZhCAqHtAqSx3mZRnWIqSmW4KXLdyI2OKv6v//emUu/Twlb1WAv0JnmP7EFNO1StUX9dJiz7M1h45tkCNMD3A57dDdk0Gh0+qP/L6E2m7BXBFe36/LOUmk8P4QbkHut2/ccYX9YQxAlxEDz3Blqb8jUSE5e2fB5D2FzgkO11zysUgdYeWokzkzFPk7f";
 const COBALT_POSITIONS = {
   front: "앞라인",
   skirmish: "교전",
@@ -175,6 +176,7 @@ let cloudLoading = false;
 let cloudCreateOpen = false;
 let editingApplicantId = null;
 let cloudAnonymousError = "";
+let activeScoreRound = 0;
 
 const $ = (selector) => document.querySelector(selector);
 
@@ -199,6 +201,7 @@ function defaultState() {
       hangulDayEnabled: false,
       tsTkScoring: false,
       tournamentScoring: true,
+      roomSettingsCode: DEFAULT_ROOM_SETTINGS_CODE,
       scoreRule: structuredClone(DEFAULT_SCORE_RULE)
     },
     eventInfo: {
@@ -371,13 +374,13 @@ function isSiteOwner() {
 }
 
 function canViewCloudEvent() {
-  return Boolean(cloudEvent && cloudEvents.some((event) => event.id === cloudEvent.id));
+  return Boolean(cloudEvent && (isSiteOwner() || cloudEvents.some((event) => event.id === cloudEvent.id)));
 }
 
 function canManageCloudEvent() {
   if (!canViewCloudEvent()) return false;
-  if (cloudEvent.owner_id && cloudEvent.owner_id !== sessionUserId()) return false;
   if (isSiteOwner()) return true;
+  if (cloudEvent.owner_id && cloudEvent.owner_id !== sessionUserId()) return false;
   if (cloudEvent.slug !== TAIL_CHASE_EVENT_SLUG) return true;
   return String(cloudSession?.user?.email || "").trim().toLowerCase() === TAIL_CHASE_EDITOR_EMAIL;
 }
@@ -708,12 +711,15 @@ async function handleCloudSession(session, preserveApplyView = false) {
     renderCloudControls();
     return;
   }
-  cloudOperator = session.user?.isAnonymous
-    ? { id: sessionUserId(session), email: "", is_owner: false, is_guest: true }
-    : await cloud.operatorProfile(sessionUserEmail(session));
+  const email = sessionUserEmail(session).trim().toLowerCase();
+  cloudOperator = {
+    id: sessionUserId(session),
+    email,
+    is_owner: (runtimeConfig.ownerEmails || []).map((item) => String(item).trim().toLowerCase()).includes(email),
+    is_guest: session.user?.isAnonymous === true
+  };
   cloudOperators = isSiteOwner() ? await cloud.listOperators() : [];
-  if (cloudOperator) await refreshCloudEvents(cloudEvent?.id || "", !preserveApplyView);
-  else cloudEvents = [];
+  await refreshCloudEvents(cloudEvent?.id || "", !preserveApplyView);
   const slug = cloudEventSlug();
   if (slug && cloudEvent?.slug !== slug) await loadPublicCloudEvent(slug);
   renderCloudControls();
@@ -1426,7 +1432,8 @@ function hangulDayBonus(entry = {}) {
   }
   const koreanCount = characters.filter((name) => KOREAN_CHARACTERS.has(name.replace(/\s+/g, ""))).length;
   const nationality = koreanCount === 3 ? 6 : koreanCount;
-  return { characters, initials, comboType, combo, koreanCount, nationality, total: combo + nationality };
+  const drill = entry.hangulDrill === true ? 1 : 0;
+  return { characters, initials, comboType, combo, koreanCount, nationality, drill, total: combo + nationality + drill };
 }
 
 function teamTotal(teamId) {
@@ -1692,30 +1699,38 @@ function renderHangulDayBoard() {
   }
   board.innerHTML = `<section class="hangul-day-panel">
     <div class="hangul-day-head">
-      <div><h3>한글날 가나다 보너스</h3><p>실험체 이름 3명을 입력하면 초성과 한국인 보너스를 자동 계산합니다. 입력 순서는 관계없습니다.</p></div>
-      <span>초성 + 국적</span>
+      <div><h3>${activeScoreRound + 1}라운드 한글날 보너스</h3><p>실험체 이름 3명을 입력하면 초성·한국인·드립 보너스를 자동 계산합니다. 입력 순서는 관계없습니다.</p></div>
+      <span>초성 + 국적 + 드립</span>
     </div>
     <div class="table-wrap"><table class="sheet-table hangul-day-table">
-      <thead><tr><th>경기</th><th>팀</th><th colspan="3">사용 실험체</th><th>초성</th><th>한국인</th><th>보너스</th></tr></thead>
-      <tbody>${state.scores.map((match, matchIndex) => state.teams.map((team) => {
+      <thead><tr><th>팀</th><th colspan="3">사용 실험체</th><th>초성</th><th>한국인</th><th>초성 드립</th><th>보너스</th></tr></thead>
+      <tbody>${state.teams.slice(0, 8).map((team) => {
+        const matchIndex = activeScoreRound;
+        const match = state.scores[matchIndex] || {};
         const entry = match[team.id] || {};
         const bonus = hangulDayBonus(entry);
         return `<tr>
-          <th>${matchIndex + 1}경기</th><th>${escapeHtml(team.name)}</th>
+          <th>${escapeHtml(team.name)}</th>
           ${bonus.characters.map((name, characterIndex) => `<td><input data-hangul-pick="${matchIndex}:${team.id}:${characterIndex}" value="${escapeHtml(name)}" placeholder="실험체 ${characterIndex + 1}"></td>`).join("")}
           <td>${escapeHtml(bonus.comboType || (bonus.initials.filter(Boolean).join("") || "-"))}${bonus.combo ? ` <strong>+${bonus.combo}</strong>` : ""}</td>
           <td>${bonus.koreanCount ? `${bonus.koreanCount}명 <strong>+${bonus.nationality}</strong>` : "-"}</td>
+          <td><div class="hangul-drill-cell"><input data-hangul-drill-text="${matchIndex}:${team.id}" value="${escapeHtml(entry.hangulDrillText || "")}" placeholder="드립 문구"><label><input data-hangul-drill="${matchIndex}:${team.id}" type="checkbox" ${bonus.drill ? "checked" : ""}> +1</label></div></td>
           <td><strong>+${bonus.total}</strong></td>
         </tr>`;
-      }).join("")).join("")}</tbody>
+      }).join("")}</tbody>
     </table></div>
-    <p class="hangul-day-note">한국인 판정: 현우 · 혜진 · 수아 · 요한 · 유민 · 헤이즈 · 비형</p>
+    <p class="hangul-day-note">초성 드립은 경기 시작 전에 발표한 경우 라운드당 1회 +1점 · 한국인 판정: 현우 · 혜진 · 수아 · 요한 · 유민 · 헤이즈 · 비형</p>
   </section>`;
 }
 
 function renderReplayCodes() {
   $("#replayBoard").innerHTML = `
-    <div class="match-record-head"><div><p class="field-title">방·리플레이 기록</p><p class="field-help">경기별 코드를 한곳에서 관리하고 결과 CSV의 게임 ID를 함께 보관합니다.</p></div></div>
+    <div class="room-settings-code">
+      <div><p class="field-title">방 설정 코드</p><p class="field-help">모든 라운드에서 사용하는 설정 코드입니다.</p></div>
+      <input data-room-settings-code value="${escapeHtml(state.settings.roomSettingsCode || DEFAULT_ROOM_SETTINGS_CODE)}" aria-label="방 설정 코드">
+      <button class="secondary" type="button" data-copy-room-settings title="방 설정 코드 복사"><i data-lucide="copy"></i> 복사</button>
+    </div>
+    <div class="match-record-head"><div><p class="field-title">방·리플레이 기록</p><p class="field-help">경기별 방 코드와 리플레이 코드를 함께 보관합니다.</p></div></div>
     <div class="match-record-grid">
       ${state.replayCodes.map((code, index) => {
         const record = state.matchRecords[index] || {};
@@ -1730,11 +1745,7 @@ function renderReplayCodes() {
 }
 
 function renderScoreSummary() {
-  if (!state.teams.length) return void ($("#scoreSummary").innerHTML = "");
-  const headers = state.teams.map((team) => `<th>${team.name}</th>`).join("");
-  const rows = state.scores.map((match, index) => `<tr><th>${index + 1}경기</th>${state.teams.map((team) => `<td>${scoreFor(match[team.id])}</td>`).join("")}</tr>`).join("");
-  const total = `<tr><th>총점</th>${state.teams.map((team) => `<td><strong>${teamTotal(team.id)}</strong></td>`).join("")}</tr>`;
-  $("#scoreSummary").innerHTML = `<table class="sheet-table"><thead><tr><th></th>${headers}</tr></thead><tbody>${rows}${total}</tbody></table>`;
+  $("#scoreSummary").innerHTML = "";
 }
 
 function groupNameForIndex(index) {
@@ -1772,38 +1783,67 @@ function renderGroupScoreSummary() {
 
 function renderMatchCards() {
   const board = $("#scoreBoard");
-  board.innerHTML = "";
+  if (!state.teams.length) {
+    board.innerHTML = `<p class="note">팀을 편성하면 8팀 빠른 점수 집계표가 표시됩니다.</p>`;
+    return;
+  }
+  activeScoreRound = Math.min(Math.max(0, activeScoreRound), state.scores.length - 1);
   const simple = state.settings.tsTkScoring === true;
-  state.scores.forEach((match, matchIndex) => {
-    const template = $("#matchTemplate").content.cloneNode(true);
-    template.querySelector("h3").textContent = `${matchIndex + 1}경기`;
-    const grid = template.querySelector(".match-grid");
-    grid.classList.toggle("simple-score-grid", simple);
-    grid.innerHTML = simple
-      ? "<b>팀 / 결과</b><b>TS</b><b>TK</b><b>합계</b>"
-      : "<b>팀 / 점수</b><b>등수</b><b>1일차 킬</b><b>이후 킬</b><b>금구사</b>";
-    state.teams.forEach((team) => {
-      const entry = match[team.id] || {};
-      if (simple) {
-        grid.insertAdjacentHTML("beforeend", `
-          <span>${team.name}</span>
-          <input data-score="${matchIndex}:${team.id}:tsScore" type="number" step="0.5" min="0" value="${entry.tsScore || ""}" placeholder="TS">
-          <input data-score="${matchIndex}:${team.id}:tkScore" type="number" step="0.5" min="0" value="${entry.tkScore || ""}" placeholder="TK">
-          <strong>${scoreFor(entry)}점</strong>`);
-      } else {
-        grid.insertAdjacentHTML("beforeend", `
-          <span>${team.name} · <strong>${scoreFor(entry)}점</strong></span>
-          <select data-score="${matchIndex}:${team.id}:place">
-            <option value="">-</option>
-            ${Object.keys(placementPoints()).map((place) => `<option value="${place}" ${String(entry.place) === place ? "selected" : ""}>${place}등</option>`).join("")}
-          </select>
-          <input data-score="${matchIndex}:${team.id}:day1Kills" type="number" min="0" value="${entry.day1Kills || 0}">
-          <input data-score="${matchIndex}:${team.id}:lateKills" type="number" min="0" value="${entry.lateKills || 0}">
-          <input data-score="${matchIndex}:${team.id}:penaltyDeaths" type="number" min="0" value="${entry.penaltyDeaths || 0}">`);
-      }
-    });
-    board.appendChild(template);
-  });
+  const match = state.scores[activeScoreRound] || {};
+  const standings = state.teams
+    .map((team) => ({ team, total: teamTotal(team.id), rounds: state.scores.map((round) => scoreFor(round[team.id])) }))
+    .sort((a, b) => b.total - a.total || a.team.name.localeCompare(b.team.name, "ko"));
+  let previousTotal = null;
+  let previousRank = 0;
+  const standingRows = standings.map((item, index) => {
+    const rank = previousTotal === item.total ? previousRank : index + 1;
+    previousTotal = item.total;
+    previousRank = rank;
+    return `<li class="standing-row${rank === 1 ? " leader" : ""}">
+      <span class="standing-rank">${rank}</span>
+      <div><strong>${escapeHtml(item.team.name)}</strong><small>${item.rounds.map((score, roundIndex) => `${roundIndex + 1}R ${score}`).join(" · ")}</small></div>
+      <b>${item.total}<small>점</small></b>
+    </li>`;
+  }).join("");
+  const roundRows = state.teams.slice(0, 8).map((team, index) => {
+    const entry = match[team.id] || {};
+    const hangulBonus = state.settings.hangulDayEnabled ? hangulDayBonus(entry).total : 0;
+    return simple
+      ? `<tr><td>${String(index + 1).padStart(2, "0")}</td><th>${escapeHtml(team.name)}</th>
+          <td><input data-score="${activeScoreRound}:${team.id}:tsScore" type="number" step="0.5" min="0" value="${entry.tsScore || ""}" placeholder="0"></td>
+          <td><input data-score="${activeScoreRound}:${team.id}:tkScore" type="number" step="0.5" min="0" value="${entry.tkScore || ""}" placeholder="0"></td>
+          <td><strong>${scoreFor(entry)}</strong></td></tr>`
+      : `<tr><td>${String(index + 1).padStart(2, "0")}</td><th>${escapeHtml(team.name)}</th>
+          <td><select data-score="${activeScoreRound}:${team.id}:place"><option value="">-</option>${Object.keys(placementPoints()).map((place) => `<option value="${place}" ${String(entry.place) === place ? "selected" : ""}>${place}등</option>`).join("")}</select></td>
+          <td><input data-score="${activeScoreRound}:${team.id}:day1Kills" type="number" min="0" value="${entry.day1Kills || 0}"></td>
+          <td><input data-score="${activeScoreRound}:${team.id}:lateKills" type="number" min="0" value="${entry.lateKills || 0}"></td>
+          <td><input data-score="${activeScoreRound}:${team.id}:penaltyDeaths" type="number" min="0" value="${entry.penaltyDeaths || 0}"></td>
+          ${state.settings.hangulDayEnabled ? `<td><b>+${hangulBonus}</b></td>` : ""}
+          <td><strong>${scoreFor(entry)}</strong></td></tr>`;
+  }).join("");
+  board.innerHTML = `<div class="quick-score-workspace">
+    <section class="quick-score-entry">
+      <header class="quick-score-head">
+        <div><span>경기 결과 입력</span><strong>${activeScoreRound + 1}라운드</strong></div>
+        <nav class="round-tabs" aria-label="라운드 선택">${state.scores.map((_, index) => `<button type="button" data-score-round="${index}" class="${index === activeScoreRound ? "active" : ""}">${index + 1}R</button>`).join("")}</nav>
+      </header>
+      <div class="quick-score-actions">
+        <button class="secondary compact" type="button" data-score-step="-1" ${activeScoreRound === 0 ? "disabled" : ""}><i data-lucide="chevron-left"></i> 이전</button>
+        <span>8팀 기준 · 입력 즉시 누적</span>
+        <button class="secondary compact" type="button" data-score-step="1" ${activeScoreRound === state.scores.length - 1 ? "disabled" : ""}>다음 <i data-lucide="chevron-right"></i></button>
+      </div>
+      <div class="quick-score-table-wrap"><table class="quick-score-table">
+        <thead><tr><th>#</th><th>팀</th>${simple ? "<th>TS</th><th>TK</th>" : `<th>등수</th><th>1일차 킬</th><th>이후 킬</th><th>금구사</th>${state.settings.hangulDayEnabled ? "<th>한글날</th>" : ""}`}<th>합계</th></tr></thead>
+        <tbody>${roundRows}</tbody>
+      </table></div>
+      <footer><button class="text-button danger-text" type="button" data-clear-score-round><i data-lucide="rotate-ccw"></i> 이 라운드 초기화</button><button class="secondary compact" type="button" data-copy-round><i data-lucide="copy"></i> 라운드 결과 복사</button></footer>
+    </section>
+    <aside class="live-standings">
+      <header><div><span>LIVE STANDINGS</span><h3>누적 순위</h3></div><b>${activeScoreRound + 1}R 입력 중</b></header>
+      <ol>${standingRows}</ol>
+      <button class="primary" type="button" data-copy-standings><i data-lucide="copy"></i> 디스코드 결과 복사</button>
+    </aside>
+  </div>`;
 }
 
 function peerlessPickFor(matchIndex, teamId, playerId) {
@@ -2103,7 +2143,7 @@ function renderHouseRulesSummary() {
     blocks.push(`
       <article class="house-rule-summary-row">
         <strong>한글날 가나다 내전</strong>
-        <p>3인 스쿼드의 실험체 첫 글자 초성이 모두 같으면 +2점, 기본 초성 순서에서 연속하면 +3점입니다. 현우·혜진·수아·요한·유민·헤이즈·비형은 1명당 +1점이며, 세 명 모두 해당하면 +6점입니다.</p>
+        <p>3인 스쿼드의 실험체 첫 글자 초성이 모두 같으면 +2점, 기본 초성 순서에서 연속하면 +3점입니다. 경기 전에 발표한 초성 드립은 라운드당 1회 +1점이며 다른 보너스와 중복됩니다. 현우·혜진·수아·요한·유민·헤이즈·비형은 1명당 +1점이며, 세 명 모두 해당하면 +6점입니다.</p>
       </article>`);
   }
   section.classList.toggle("empty-house-rules", !blocks.length);
@@ -2140,7 +2180,7 @@ function exportCsv() {
     ["weaponAssignments", Object.entries(state.weaponAssignments).map(([team, group]) => `${team}:${group}`).join(" / ")],
     ["placementPoints", currentScoreRule().placement.join("/")],
     [],
-    ["team", "captain", "members", "total", "match", "roomCode", "replayCode", "gameId", "place", "day1Kills", "lateKills", "penaltyDeaths", "tsScore", "tkScore", "hangulCharacters", "hangulComboBonus", "koreanBonus", "score", "bans", "usedCharacters"]
+    ["team", "captain", "members", "total", "match", "roomCode", "replayCode", "gameId", "place", "day1Kills", "lateKills", "penaltyDeaths", "tsScore", "tkScore", "hangulCharacters", "hangulComboBonus", "koreanBonus", "hangulDrill", "hangulDrillText", "score", "bans", "usedCharacters"]
   ];
   state.teams.forEach((team) => {
     const members = team.members.map((id) => getApplicant(id)?.nickname).filter(Boolean).join(" / ");
@@ -2151,7 +2191,7 @@ function exportCsv() {
         .map(([playerId, character]) => `${getApplicant(playerId)?.nickname || playerId}:${character}`)
         .join(" / ");
       const hangulBonus = hangulDayBonus(entry);
-      rows.push([team.name, captain, members, teamTotal(team.id), index + 1, state.roomCodes[index] || "", state.replayCodes[index] || "", state.matchRecords[index]?.gameId || "", entry.place || "", entry.day1Kills || 0, entry.lateKills || 0, entry.penaltyDeaths || 0, entry.tsScore || 0, entry.tkScore || 0, hangulBonus.characters.join(" / "), hangulBonus.combo, hangulBonus.nationality, scoreFor(entry), entry.bans || "", usedCharacters]);
+      rows.push([team.name, captain, members, teamTotal(team.id), index + 1, state.roomCodes[index] || "", state.replayCodes[index] || "", state.matchRecords[index]?.gameId || "", entry.place || "", entry.day1Kills || 0, entry.lateKills || 0, entry.penaltyDeaths || 0, entry.tsScore || 0, entry.tkScore || 0, hangulBonus.characters.join(" / "), hangulBonus.combo, hangulBonus.nationality, hangulBonus.drill, entry.hangulDrillText || "", scoreFor(entry), entry.bans || "", usedCharacters]);
     });
   });
   const csv = rows.map((row) => row.map((cell) => `"${String(cell ?? "").replaceAll("\"", "\"\"")}"`).join(",")).join("\n");
@@ -2632,11 +2672,14 @@ function bindEvents() {
   $("#cancelApplicantEdit").addEventListener("click", () => $("#applicantEditDialog").close());
   $("#applicantEditForm").addEventListener("submit", saveApplicantEdit);
   $("#scoreBoard").addEventListener("change", updateScore);
+  $("#scoreBoard").addEventListener("click", handleScoreBoardClick);
   $("#hangulDayBoard").addEventListener("change", updateHangulDayPick);
   $("#peerlessBoard").addEventListener("change", updatePeerlessPick);
   $("#banBoard").addEventListener("change", updateBan);
   $("#replayBoard").addEventListener("change", updateReplay);
   $("#replayBoard").addEventListener("change", updateRoom);
+  $("#replayBoard").addEventListener("change", updateRoomSettingsCode);
+  $("#replayBoard").addEventListener("click", copyRoomSettingsCode);
   $("#captainBoard").addEventListener("change", updateCaptain);
   $("#teamsBoard").addEventListener("dragstart", startTeamMemberDrag);
   $("#teamsBoard").addEventListener("dragover", handleTeamMemberDragOver);
@@ -2660,7 +2703,82 @@ function updateScore(event) {
   saveState();
 }
 
+async function copyScoreText(scope = "all") {
+  const sorted = state.teams
+    .map((team) => ({ team, total: teamTotal(team.id), round: scoreFor(state.scores[activeScoreRound]?.[team.id]) }))
+    .sort((a, b) => (scope === "round" ? b.round - a.round : b.total - a.total) || a.team.name.localeCompare(b.team.name, "ko"));
+  let previousScore = null;
+  let previousRank = 0;
+  const lines = sorted.map((item, index) => {
+    const score = scope === "round" ? item.round : item.total;
+    const rank = score === previousScore ? previousRank : index + 1;
+    previousScore = score;
+    previousRank = rank;
+    return `${rank}위 · ${item.team.name} · ${score}점`;
+  });
+  const title = scope === "round" ? `${activeScoreRound + 1}라운드 결과` : `${state.settings.eventName} 누적 순위`;
+  const text = `${title}\n${lines.join("\n")}`;
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch {
+    const area = document.createElement("textarea");
+    area.value = text;
+    document.body.appendChild(area);
+    area.select();
+    document.execCommand("copy");
+    area.remove();
+  }
+  toast(scope === "round" ? "라운드 결과를 복사했습니다." : "누적 순위를 복사했습니다.");
+}
+
+function handleScoreBoardClick(event) {
+  const roundButton = event.target.closest("[data-score-round]");
+  if (roundButton) {
+    activeScoreRound = Number(roundButton.dataset.scoreRound);
+    renderScores();
+    refreshIcons();
+    return;
+  }
+  const stepButton = event.target.closest("[data-score-step]");
+  if (stepButton) {
+    activeScoreRound = Math.min(state.scores.length - 1, Math.max(0, activeScoreRound + Number(stepButton.dataset.scoreStep)));
+    renderScores();
+    refreshIcons();
+    return;
+  }
+  if (event.target.closest("[data-copy-round]")) return void copyScoreText("round");
+  if (event.target.closest("[data-copy-standings]")) return void copyScoreText("all");
+  if (event.target.closest("[data-clear-score-round]")) {
+    if (!confirm(`${activeScoreRound + 1}라운드 점수 입력을 초기화할까요?`)) return;
+    state.teams.forEach((team) => {
+      const entry = state.scores[activeScoreRound]?.[team.id] || {};
+      state.scores[activeScoreRound][team.id] = {
+        ...entry,
+        place: "",
+        day1Kills: 0,
+        lateKills: 0,
+        penaltyDeaths: 0,
+        tsScore: 0,
+        tkScore: 0
+      };
+    });
+    saveState();
+    toast(`${activeScoreRound + 1}라운드를 초기화했습니다.`);
+  }
+}
+
 function updateHangulDayPick(event) {
+  const drillToken = event.target.dataset.hangulDrill;
+  const drillTextToken = event.target.dataset.hangulDrillText;
+  if (drillToken || drillTextToken) {
+    const [matchIndex, teamId] = (drillToken || drillTextToken).split(":");
+    const entry = state.scores[Number(matchIndex)]?.[teamId];
+    if (!entry) return;
+    if (drillToken) entry.hangulDrill = event.target.checked;
+    else entry.hangulDrillText = event.target.value.trim();
+    saveState();
+    return;
+  }
   const token = event.target.dataset.hangulPick;
   if (!token) return;
   const [matchIndex, teamId, characterIndex] = token.split(":");
@@ -2693,6 +2811,25 @@ function updateRoom(event) {
   if (index === undefined) return;
   state.roomCodes[Number(index)] = event.target.value.trim();
   saveState();
+}
+
+function updateRoomSettingsCode(event) {
+  if (!event.target.matches("[data-room-settings-code]")) return;
+  state.settings.roomSettingsCode = event.target.value.trim() || DEFAULT_ROOM_SETTINGS_CODE;
+  saveState();
+}
+
+async function copyRoomSettingsCode(event) {
+  if (!event.target.closest("[data-copy-room-settings]")) return;
+  const code = state.settings.roomSettingsCode || DEFAULT_ROOM_SETTINGS_CODE;
+  try {
+    await navigator.clipboard.writeText(code);
+  } catch {
+    const input = $("[data-room-settings-code]");
+    input.select();
+    document.execCommand("copy");
+  }
+  toast("방 설정 코드를 복사했습니다.");
 }
 
 function updateBan(event) {

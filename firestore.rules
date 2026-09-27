@@ -26,8 +26,10 @@ service cloud.firestore {
     }
 
     function ownsEvent(eventId) {
-      return signedIn()
-        && get(/databases/$(database)/documents/events/$(eventId)).data.owner_id == request.auth.uid;
+      return isOwner() || (
+        signedIn()
+        && get(/databases/$(database)/documents/events/$(eventId)).data.owner_id == request.auth.uid
+      );
     }
 
     match /siteOperators/{operatorEmail} {
@@ -41,7 +43,7 @@ service cloud.firestore {
     match /events/{eventId} {
       allow read: if true;
       allow create: if signedIn() && request.resource.data.owner_id == request.auth.uid;
-      allow update, delete: if signedIn() && resource.data.owner_id == request.auth.uid;
+      allow update, delete: if isOwner() || (signedIn() && resource.data.owner_id == request.auth.uid);
 
       match /applicants/{applicantId} {
         allow read, update, delete: if ownsEvent(eventId);

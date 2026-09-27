@@ -2,6 +2,7 @@
 *.tmp
 firebase-debug.log
 firebase-home.png
+reference-scoreboard.png
 .DS_Store
 Thumbs.db
 config.local.json
