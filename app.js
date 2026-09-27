@@ -1,6 +1,6 @@
 const STORAGE_KEY = "er-custom-match-calculator-v2";
 const LEGACY_STORAGE_KEY = "er-scrim-calculator-v1";
-const APP_BUILD_ID = "20260927-scoreboard-3";
+const APP_BUILD_ID = "20260927-site-operators-2";
 const API_BASE = "https://open-api.bser.io";
 const DEFAULT_SEASON_ID = 41;
 const RANK_TEAM_MODE = 3;
@@ -374,14 +374,24 @@ function isSiteOwner() {
   return cloudOperator?.is_owner === true;
 }
 
+function isSiteOperator() {
+  return cloudOperator?.is_registered === true;
+}
+
 function canViewCloudEvent() {
-  return Boolean(cloudEvent && (isSiteOwner() || cloudEvents.some((event) => event.id === cloudEvent.id)));
+  if (!cloudEvent) return false;
+  if (isSiteOperator()) return true;
+  if (cloudEvent.owner_id && cloudEvent.owner_id === sessionUserId()) return true;
+  if (cloudEvent.owner_email && cloudEvent.owner_email === sessionUserEmail().trim().toLowerCase()) return true;
+  return cloudEvents.some((event) => event.id === cloudEvent.id);
 }
 
 function canManageCloudEvent() {
   if (!canViewCloudEvent()) return false;
   if (isSiteOwner()) return true;
-  if (cloudEvent.owner_id && cloudEvent.owner_id !== sessionUserId()) return false;
+  const ownsEvent = cloudEvent.owner_id === sessionUserId()
+    || Boolean(cloudEvent.owner_email && cloudEvent.owner_email === sessionUserEmail().trim().toLowerCase());
+  if (!isSiteOperator() && !ownsEvent) return false;
   if (cloudEvent.slug !== TAIL_CHASE_EVENT_SLUG) return true;
   return String(cloudSession?.user?.email || "").trim().toLowerCase() === TAIL_CHASE_EDITOR_EMAIL;
 }
@@ -620,11 +630,13 @@ function subscribeCloudEvent() {
   if (cloudEventUnsubscribe) cloudEventUnsubscribe();
   cloudEventUnsubscribe = null;
   if (!cloudEvent?.id) return;
-  const subscribe = cloudSession && canViewCloudEvent() ? cloud.subscribeEvent : cloud.subscribePublicEvent;
-  cloudEventUnsubscribe = subscribe(cloudEvent.id, () => {
+  const callback = () => {
     clearTimeout(subscribeCloudEvent.timer);
     subscribeCloudEvent.timer = setTimeout(() => reloadCloudEventState().catch((error) => toast(error.message)), 250);
-  });
+  };
+  cloudEventUnsubscribe = cloudSession && canViewCloudEvent()
+    ? cloud.subscribeEvent(cloudEvent.id, callback)
+    : cloud.subscribePublicEvent(cloudEvent.id, callback);
 }
 
 function subscribeCloudApplicants() {
@@ -683,7 +695,7 @@ async function loadPublicCloudEvent(slug) {
 
 async function refreshCloudEvents(preferredId = "", openSelected = true) {
   if (!cloudSession || !cloudOperator) return;
-  cloudEvents = await cloud.listEvents();
+  cloudEvents = await cloud.listEvents(isSiteOperator());
   const validIds = new Set(cloudEvents.map((event) => event.id));
   const selected = validIds.has(preferredId)
     ? preferredId
@@ -715,10 +727,12 @@ async function handleCloudSession(session, preserveApplyView = false) {
     return;
   }
   const email = sessionUserEmail(session).trim().toLowerCase();
+  const profile = email ? await cloud.operatorProfile(email) : null;
   cloudOperator = {
     id: sessionUserId(session),
     email,
-    is_owner: (runtimeConfig.ownerEmails || []).map((item) => String(item).trim().toLowerCase()).includes(email),
+    is_owner: profile?.is_owner === true,
+    is_registered: profile?.is_registered === true,
     is_guest: session.user?.isAnonymous === true
   };
   cloudOperators = isSiteOwner() ? await cloud.listOperators() : [];
@@ -2476,7 +2490,13 @@ function bindEvents() {
         seed.eventInfo.teamFormat = "코발트 4v4";
         seed.eventInfo.capacity = "8명";
       }
-      const created = await cloud.createEvent({ ownerId: sessionUserId(), name, slug, state: seed });
+      const created = await cloud.createEvent({
+        ownerId: sessionUserId(),
+        ownerEmail: sessionUserEmail(),
+        name,
+        slug,
+        state: seed
+      });
       $("#createEventForm").reset();
       cloudCreateOpen = false;
       await refreshCloudEvents(created.id);

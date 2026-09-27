@@ -44,6 +44,7 @@
     return {
       id: doc.id,
       owner_id: data.owner_id || "",
+      owner_email: normalizeEmail(data.owner_email),
       slug: data.slug || "",
       name: data.name || data.settings?.eventName || "이터널 리턴 내전",
       published: data.published !== false,
@@ -146,6 +147,7 @@
       id: doc.id,
       email: data.email || fallbackEmail || doc.id,
       is_owner: data.is_owner === true,
+      is_registered: true,
       created_at: toIso(data.created_at)
     };
   }
@@ -195,16 +197,16 @@
 
       async operatorProfile(email) {
         if (auth.currentUser?.isAnonymous) {
-          return { id: auth.currentUser.uid, email: "", is_owner: false, is_guest: true, created_at: null };
+          return { id: auth.currentUser.uid, email: "", is_owner: false, is_registered: false, is_guest: true, created_at: null };
         }
         const normalized = normalizeEmail(email);
         if (!normalized) return null;
+        if ((config.ownerEmails || []).map(normalizeEmail).includes(normalized)) {
+          return { id: normalized, email: normalized, is_owner: true, is_registered: true, created_at: null };
+        }
         const doc = await operators().doc(normalized).get();
         const saved = operatorFromDoc(doc, normalized);
         if (saved) return saved;
-        if ((config.ownerEmails || []).map(normalizeEmail).includes(normalized)) {
-          return { id: normalized, email: normalized, is_owner: true, created_at: null };
-        }
         return null;
       },
 
@@ -218,7 +220,11 @@
             return String(a.created_at || "").localeCompare(String(b.created_at || ""));
           });
         (config.ownerEmails || []).map(normalizeEmail).forEach((email) => {
-          if (email && !rows.some((row) => normalizeEmail(row.email) === email)) {
+          const existing = rows.find((row) => normalizeEmail(row.email) === email);
+          if (existing) {
+            existing.is_owner = true;
+            existing.is_registered = true;
+          } else if (email) {
             rows.unshift({ id: email, email, is_owner: true, created_at: null });
           }
         });
@@ -247,17 +253,20 @@
         await operators().doc(normalizeEmail(operatorId)).delete();
       },
 
-      async listEvents() {
+      async listEvents(includeAll = false) {
         if (!auth.currentUser) return [];
-        const snapshot = await events().where("owner_id", "==", auth.currentUser.uid).get();
+        const snapshot = includeAll
+          ? await events().get()
+          : await events().where("owner_id", "==", auth.currentUser.uid).get();
         return snapshot.docs.map(eventFromDoc);
       },
 
-      async createEvent({ ownerId, name, slug, state }) {
+      async createEvent({ ownerId, ownerEmail, name, slug, state }) {
         const ref = events().doc();
         await ref.set({
           ...eventPayload(state, firebase),
           owner_id: ownerId,
+          owner_email: normalizeEmail(ownerEmail),
           slug,
           name,
           published: true,
